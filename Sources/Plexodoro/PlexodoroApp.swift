@@ -39,7 +39,7 @@ struct ContentView: View {
             Divider()
 
             Button("Settings…") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                openSettings()
             }
             .buttonStyle(.plain)
             .font(.caption)
@@ -52,6 +52,22 @@ struct ContentView: View {
         }
         .padding()
         .frame(width: 240)
+    }
+
+    private func openSettings() {
+        if let existing = NSApp.windows.first(where: { $0.identifier?.rawValue == "plexodoro-settings" }) {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let window = NSWindow(
+            contentViewController: NSHostingController(rootView: SettingsView(appState: appState))
+        )
+        window.title = "Settings"
+        window.identifier = NSUserInterfaceItemIdentifier("plexodoro-settings")
+        window.setContentSize(NSSize(width: 400, height: 160))
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private var idleView: some View {

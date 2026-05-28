@@ -18,6 +18,7 @@ class AppState: ObservableObject {
     let player = AudioPlayer()
     var client: PlexClient?
     private var timerSubscription: AnyCancellable?
+    private var isTimerPaused = false
 
     init() {
         let savedURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://your-plex-server:32400"
@@ -120,8 +121,14 @@ class AppState: ObservableObject {
     func stopPomodoro() {
         state = .stopping
         timerSubscription?.cancel()
+        isTimerPaused = false
         player.stop()
         resetState()
+    }
+
+    func togglePlayback() {
+        player.togglePlayPause()
+        isTimerPaused = !player.isPlaying
     }
 
     private func startTimer(duration: TimeInterval) {
@@ -129,7 +136,7 @@ class AppState: ObservableObject {
         timerSubscription = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                guard let self = self, self.state == .running else { return }
+                guard let self = self, self.state == .running, !self.isTimerPaused else { return }
                 self.timeRemaining -= 1
                 if self.timeRemaining <= 0 {
                     self.timeRemaining = 0

@@ -209,7 +209,7 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 if !appState.player.isDownloading {
                     Button {
-                        appState.player.togglePlayPause()
+                        appState.togglePlayback()
                     } label: {
                         Image(systemName: appState.player.isPlaying ? "pause.fill" : "play.fill")
                     }

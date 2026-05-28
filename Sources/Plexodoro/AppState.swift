@@ -79,23 +79,21 @@ class AppState: ObservableObject {
                 currentTrackTitle = "\(seedTrack.artist) — \(seedTrack.title)"
 
                 let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
-                    .filter { $0.id != seedTrack.id }
-
-                let config = PomodoroConfig.default
-                let seedDuration = seedTrack.duration / 1000
-                let remainingTarget = config.targetDuration - seedDuration
                 let engine = PomodoroEngine()
+                var packed = engine.pack(tracks: nearest)
+                // Ensure seed is always in the playlist (nearest usually excludes it)
+                if !packed.contains(where: { $0.id == seedTrack.id }) {
+                    packed.append(seedTrack)
+                }
+                packed.shuffle()
+                let totalSeconds = engine.totalDuration(of: packed)
 
-                let packed = engine.pack(tracks: nearest, target: max(remainingTarget, config.tolerance * 2))
-                let playlist = [seedTrack] + packed.shuffled()
-                let totalSeconds = engine.totalDuration(of: playlist)
-
-                let urls: [URL] = playlist.compactMap { track in
+                let urls: [URL] = packed.compactMap { track in
                     guard !track.key.isEmpty else { return nil }
                     return client.streamURL(for: track)
                 }
 
-                guard urls.count == playlist.count else {
+                guard urls.count == packed.count else {
                     throw PlexodoroError.noAudioURL
                 }
 
@@ -118,7 +116,7 @@ class AppState: ObservableObject {
 
                 timeRemaining = totalSeconds
                 player.isDownloading = true
-                await player.play(tracks: playlist, urls: urls)
+                await player.play(tracks: packed, urls: urls)
                 startTimer(duration: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription

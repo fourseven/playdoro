@@ -6,17 +6,9 @@ struct PlexTrack: Identifiable, Equatable {
     let artist: String
     let album: String
     let duration: TimeInterval
+    let key: String
     let thumb: String?
     let distance: Double?
-}
-
-struct PlexClientInfo: Identifiable {
-    let id: String
-    let name: String
-    let host: String
-    let port: Int
-    let product: String
-    let deviceClass: String
 }
 
 struct PlexSession {
@@ -42,8 +34,7 @@ enum PlexodoroError: LocalizedError {
     case serverUnreachable
     case noCurrentTrack
     case noSonicAnalysis
-    case noAvailablePlayer
-    case playlistCreationFailed
+    case noAudioURL
     case playbackFailed
 
     var errorDescription: String? {
@@ -51,9 +42,8 @@ enum PlexodoroError: LocalizedError {
         case .serverUnreachable: "Cannot reach Plex server"
         case .noCurrentTrack: "No track is currently playing"
         case .noSonicAnalysis: "Sonic analysis is not enabled on your library"
-        case .noAvailablePlayer: "No PlexAmp or Plex player found"
-        case .playlistCreationFailed: "Failed to create pomodoro playlist"
-        case .playbackFailed: "Failed to start playback"
+        case .noAudioURL: "Could not get audio stream URL for tracks"
+        case .playbackFailed: "Failed to start audio playback"
         }
     }
 }
@@ -63,12 +53,10 @@ enum PlexodoroError: LocalizedError {
 struct PlexMediaContainer: Decodable {
     let size: Int?
     let metadata: [PlexTrackJSON]?
-    let server: [PlexServerJSON]?
 
     enum CodingKeys: String, CodingKey {
         case size
         case metadata = "Metadata"
-        case server = "Server"
     }
 }
 
@@ -83,6 +71,13 @@ struct PlexTrackJSON: Decodable {
     let type: String?
     let player: PlexPlayerJSON?
     let librarySectionID: String?
+    let media: [PlexMediaJSON]?
+
+    enum CodingKeys: String, CodingKey {
+        case ratingKey, title, grandparentTitle, parentTitle, duration
+        case thumb, distance, type, player, librarySectionID
+        case media = "Media"
+    }
 
     var toTrack: PlexTrack {
         PlexTrack(
@@ -91,32 +86,25 @@ struct PlexTrackJSON: Decodable {
             artist: grandparentTitle ?? "Unknown",
             album: parentTitle ?? "Unknown",
             duration: TimeInterval(duration ?? 0),
+            key: media?.first?.part?.first?.key ?? "",
             thumb: thumb,
             distance: distance
         )
     }
 }
 
-struct PlexPlayerJSON: Decodable {
-    let state: String
+struct PlexMediaJSON: Decodable {
+    let part: [PlexPartJSON]?
+
+    enum CodingKeys: String, CodingKey {
+        case part = "Part"
+    }
 }
 
-struct PlexServerJSON: Decodable {
-    let name: String
-    let host: String
-    let port: Int
-    let machineIdentifier: String
-    let product: String
-    let deviceClass: String
+struct PlexPartJSON: Decodable {
+    let key: String?
+}
 
-    var toClient: PlexClientInfo {
-        PlexClientInfo(
-            id: machineIdentifier,
-            name: name,
-            host: host,
-            port: port,
-            product: product,
-            deviceClass: deviceClass
-        )
-    }
+struct PlexPlayerJSON: Decodable {
+    let state: String
 }

@@ -15,6 +15,7 @@ class AppState: ObservableObject {
     }
     @Published var isConfigured: Bool = false
 
+    let player = AudioPlayer()
     private var client: PlexClient?
     private var timerSubscription: AnyCancellable?
 
@@ -36,14 +37,9 @@ class AppState: ObservableObject {
         self.client = PlexClient(serverURL: serverURL, token: token)
 
         Task {
-            do {
-                let _ = try await client?.getClients()
-                isConfigured = true
-                errorMessage = nil
-            } catch {
-                isConfigured = false
-                errorMessage = "Could not connect to Plex server"
-            }
+            let ok = await client?.ping() ?? false
+            isConfigured = ok
+            errorMessage = ok ? nil : "Could not connect to Plex server"
         }
     }
 
@@ -69,21 +65,33 @@ class AppState: ObservableObject {
                 let packed = engine.pack(tracks: nearest)
                 let totalSeconds = engine.totalDuration(of: packed)
 
-                let playlistId = try await client.createPlaylist(
-                    title: "Plexodoro - \(Date.now.formatted(date: .omitted, time: .shortened))",
-                    trackIds: packed.map { $0.id }
-                )
-
-                let plexAmpClients = try await client.getClients()
-                guard let player = plexAmpClients.first else {
-                    throw PlexodoroError.noAvailablePlayer
+                let urls: [URL] = packed.compactMap { track in
+                    guard !track.key.isEmpty else { return nil }
+                    return client.streamURL(for: track)
                 }
 
-                try await client.playPlaylist(
-                    clientId: player.id,
-                    playlistKey: "/playlists/\(playlistId)"
-                )
+                guard urls.count == packed.count else {
+                    throw PlexodoroError.noAudioURL
+                }
 
+                player.onPlaylistFinished = { [weak self] in
+                    Task { @MainActor in
+                        self?.timerSubscription?.cancel()
+                        self?.state = .finished
+                        try? await Task.sleep(nanoseconds: 5_000_000_000)
+                        self?.resetState()
+                    }
+                }
+
+                player.onStoppedAtTrackEnd = { [weak self] in
+                    Task { @MainActor in
+                        self?.state = .finished
+                        try? await Task.sleep(nanoseconds: 5_000_000_000)
+                        self?.resetState()
+                    }
+                }
+
+                player.play(tracks: packed, urls: urls)
                 startTimer(duration: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription
@@ -95,16 +103,8 @@ class AppState: ObservableObject {
     func stopPomodoro() {
         state = .stopping
         timerSubscription?.cancel()
-
-        Task {
-            if let client = client {
-                let clients = try? await client.getClients()
-                if let player = clients?.first {
-                    try? await client.stopPlayback(clientId: player.id)
-                }
-            }
-            resetState()
-        }
+        player.stop()
+        resetState()
     }
 
     private func startTimer(duration: TimeInterval) {
@@ -124,18 +124,7 @@ class AppState: ObservableObject {
     private func handleTimerFinished() {
         state = .stopping
         timerSubscription?.cancel()
-
-        Task {
-            if let client = client {
-                let clients = try? await client.getClients()
-                if let player = clients?.first {
-                    try? await client.stopPlayback(clientId: player.id)
-                }
-            }
-            state = .finished
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            resetState()
-        }
+        player.stopAfterCurrentTrack()
     }
 
     private func resetState() {

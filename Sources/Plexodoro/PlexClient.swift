@@ -1,15 +1,37 @@
 import Foundation
 
+private final class TrustDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+}
+
 actor PlexClient {
     let serverURL: String
     let token: String
 
     private let decoder = JSONDecoder()
+    private let session: URLSession
+    private let delegate = TrustDelegate()
 
     init(serverURL: String, token: String) {
         self.serverURL = serverURL
         self.token = token
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     }
+
+    deinit { session.invalidateAndCancel() }
 
     private func url(path: String, query: [URLQueryItem] = []) -> URL {
         var components = URLComponents(string: "\(serverURL)\(path)")!
@@ -25,12 +47,19 @@ actor PlexClient {
         req.httpMethod = method
         req.timeoutInterval = 15
 
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw PlexodoroError.serverUnreachable
+        return try await withCheckedThrowingContinuation { continuation in
+            session.dataTask(with: req) { data, response, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let data = data,
+                          let httpResponse = response as? HTTPURLResponse,
+                          httpResponse.statusCode == 200 {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                }
+            }.resume()
         }
-        return data
     }
 
     func ping() async throws {

@@ -298,6 +298,13 @@ class AppState: ObservableObject {
         isTimerPaused = !player.isPlaying
     }
 
+    func pausePlayback() {
+        guard state == .running, !isTimerPaused else { return }
+        player.pause()
+        isTimerPaused = true
+        isPlaying = false
+    }
+
     private func startTimer(duration: TimeInterval) {
         timeRemaining = duration
         timerSubscription = Timer.publish(every: 1, on: .main, in: .common)

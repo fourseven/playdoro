@@ -1,6 +1,9 @@
 import AVFoundation
 import Foundation
 import Logging
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private let log = Logger(label: "com.plexodoro.audioplayer")
 private let fileLogURL = FileManager.default.temporaryDirectory.appendingPathComponent("plexodoro_audio_player.log")
@@ -135,7 +138,22 @@ class AudioPlayer: ObservableObject {
 
     // MARK: - Download & Play
 
+    private func configureAudioSession() {
+        #if canImport(UIKit)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+    }
+
+    private func setIdleTimerDisabled(_ disabled: Bool) {
+        #if canImport(UIKit)
+        UIApplication.shared.isIdleTimerDisabled = disabled
+        #endif
+    }
+
     func downloadAndPlay(tracks: [Track], urls: [URL]) async -> [Track] {
+        configureAudioSession()
+        setIdleTimerDisabled(true)
         try? FileManager.default.removeItem(at: fileLogURL)
         fileLog("Downloading \(tracks.count) tracks, playing first immediately...")
 
@@ -278,16 +296,24 @@ class AudioPlayer: ObservableObject {
         }
     }
 
+    func pause() {
+        guard let player = player else {
+            fileErr("pause: no player")
+            return
+        }
+        fileLog("Pausing (rate was \(player.rate))")
+        player.pause()
+        isPlaying = false
+        fileLog("  rate now \(player.rate)")
+    }
+
     func togglePlayPause() {
         guard let player = player else {
             fileErr("togglePlayPause: no player")
             return
         }
         if isPlaying {
-            fileLog("Pausing (rate was \(player.rate))")
-            player.pause()
-            isPlaying = false
-            fileLog("  rate now \(player.rate)")
+            pause()
         } else {
             fileLog("Resuming")
             player.play()
@@ -309,6 +335,7 @@ class AudioPlayer: ObservableObject {
         playerItems = []
         isPlaying = false
         cleanupTempFiles()
+        setIdleTimerDisabled(false)
         fileLog("STOP complete")
     }
 

@@ -1,5 +1,8 @@
 import Foundation
 import Logging
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private let log = Logger(label: "com.plexodoro.plexauth")
 
@@ -17,21 +20,36 @@ actor PlexAuthManager {
         if let saved = UserDefaults.standard.string(forKey: UserDefaultsKey.plexClientId) {
             self.clientId = saved
         } else {
-            let host = ProcessInfo.processInfo.hostName
             let suffix = UUID().uuidString.prefix(8)
-            let id = "plexodoro-\(host)-\(suffix)"
+            let id = "plexodoro-\(suffix)"
             UserDefaults.standard.set(id, forKey: UserDefaultsKey.plexClientId)
             self.clientId = id
         }
+    }
+
+    private var platformName: String {
+        #if canImport(UIKit)
+        UIDevice.current.model
+        #else
+        ProcessInfo.processInfo.hostName
+        #endif
+    }
+
+    private var platformOS: String {
+        #if canImport(UIKit)
+        "iOS"
+        #else
+        "macOS"
+        #endif
     }
 
     private var baseHeaders: [String: String] {
         [
             "X-Plex-Client-Identifier": clientId,
             "X-Plex-Product": "Plexodoro",
-            "X-Plex-Device": "macOS",
-            "X-Plex-Device-Name": "Mac",
-            "X-Plex-Platform": "macOS",
+            "X-Plex-Device": platformOS,
+            "X-Plex-Device-Name": platformName,
+            "X-Plex-Platform": platformOS,
             "Accept": "application/json",
         ]
     }

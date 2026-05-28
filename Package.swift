@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "Plexodoro",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14),
+        .iOS(.v17),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),

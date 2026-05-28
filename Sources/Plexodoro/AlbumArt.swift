@@ -79,18 +79,28 @@ struct AlbumArt: View {
 
     var body: some View {
         Group {
-            if let data = imageData, let nsImage = NSImage(data: data) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+            if let data = imageData {
+                #if os(macOS)
+                if let nsImage = NSImage(data: data) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+                #else
+                if let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+                #endif
             } else if url != nil {
-                Color(nsColor: .controlBackgroundColor)
+                Color(.systemFill)
                     .overlay {
                         ProgressView()
                             .scaleEffect(0.5)
                     }
             } else {
-                Color(nsColor: .controlBackgroundColor)
+                Color(.systemFill)
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.title)

@@ -10,15 +10,20 @@ struct ContentView: View {
     @State private var searchTaskID = UUID()
 
     var body: some View {
+        #if os(macOS)
+        macBody
+        #else
+        iosBody
+        #endif
+    }
+
+    #if os(macOS)
+    private var macBody: some View {
         VStack(spacing: 12) {
             if showSettings {
                 settingsContent
-            } else if !appState.isConfigured {
-                connectionContent
-            } else if appState.state == .idle {
-                idleView
             } else {
-                activeView
+                mainContent
             }
 
             Divider()
@@ -48,6 +53,41 @@ struct ContentView: View {
         }
         .padding()
         .frame(width: 300)
+    }
+    #endif
+
+    #if os(iOS)
+    private var iosBody: some View {
+        mainContent
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    settingsContent
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showSettings = false }
+                            }
+                        }
+                }
+            }
+    }
+    #endif
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if !appState.isConfigured {
+            connectionContent
+        } else if appState.state == .idle {
+            idleView
+        } else {
+            activeView
+        }
     }
 
     @ViewBuilder

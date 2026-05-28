@@ -22,12 +22,12 @@ struct SearchBar: View {
                     .foregroundColor(.secondary)
                 TextField("Search for a seed track…", text: $searchText)
                     .textFieldStyle(.plain)
-                    .onChange(of: searchText) { newValue in
+                    .onChange(of: searchText) { _, newValue in
                         onSearch(newValue)
                     }
             }
             .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(Color(.systemFill))
             .cornerRadius(6)
 
             if isSearching {
@@ -62,7 +62,7 @@ struct SearchBar: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .background(Color(nsColor: .controlBackgroundColor))
+                            .background(Color(.systemFill))
                             .cornerRadius(4)
                         }
                     }

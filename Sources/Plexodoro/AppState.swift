@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+import Logging
+
+private let log = Logger(label: "com.plexodoro.appstate")
 
 @MainActor
 class AppState: ObservableObject {
@@ -7,50 +10,155 @@ class AppState: ObservableObject {
     @Published var timeRemaining: TimeInterval = 25 * 60
     @Published var currentTrackTitle: String = ""
     @Published var errorMessage: String?
-    @Published var serverURL: String {
-        didSet { UserDefaults.standard.set(serverURL, forKey: UserDefaultsKey.serverURL) }
-    }
-    @Published var token: String {
-        didSet { UserDefaults.standard.set(token, forKey: UserDefaultsKey.plexToken) }
-    }
+
+    @Published var connectionState: ConnectionState = .disconnected
+    @Published var authCode: String = ""
+    @Published var serverName: String = ""
+    @Published var serverURL: String = ""
+    @Published var token: String = ""
     @Published var isConfigured: Bool = false
+
     @Published var playlistTracks: [Track] = []
     @Published var currentTrackIndex: Int = 0
     @Published var isDownloading: Bool = false
+    @Published var isPlaying: Bool = false
 
     let player = AudioPlayer()
     var client: (any MusicProvider)?
+    private let authManager = PlexAuthManager()
     private var timerSubscription: AnyCancellable?
     private var isTimerPaused = false
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
-        let savedURL = UserDefaults.standard.string(forKey: UserDefaultsKey.serverURL) ?? "https://your-plex-server:32400"
+        let savedURL = UserDefaults.standard.string(forKey: UserDefaultsKey.serverURL) ?? ""
         let savedToken = UserDefaults.standard.string(forKey: UserDefaultsKey.plexToken) ?? ""
-        self.serverURL = savedURL
-        self.token = savedToken
-        self.isConfigured = !savedToken.isEmpty
+        let savedName = UserDefaults.standard.string(forKey: UserDefaultsKey.serverName) ?? ""
 
-        if isConfigured {
-            self.client = PlexClient(serverURL: savedURL, token: savedToken)
+        if !savedToken.isEmpty {
+            serverURL = savedURL
+            token = savedToken
+            serverName = savedName
+            verifySavedConnection(token: savedToken)
         }
+
+        player.$isPlaying
+            .assign(to: \.isPlaying, on: self)
+            .store(in: &cancellables)
     }
 
-    func updateCredentials(serverURL: String, token: String) {
-        self.serverURL = serverURL
-        self.token = token
-        self.client = PlexClient(serverURL: serverURL, token: token)
+    // MARK: - OAuth Flow
 
+    func connect() {
         Task {
+            connectionState = .linking
             do {
-                try await client?.ping()
+                let pin = try await authManager.requestPin()
+                authCode = pin.code
+
+                let newToken = try await authManager.pollForAuth(pinId: pin.id)
+                token = newToken
+                UserDefaults.standard.set(newToken, forKey: UserDefaultsKey.plexToken)
+
+                let (name, uris) = try await authManager.discoverServers(token: newToken)
+                serverName = name
+                UserDefaults.standard.set(name, forKey: UserDefaultsKey.serverName)
+
+                connectionState = .discovering
+                try await connectToServer(uris: uris, token: newToken)
+
                 isConfigured = true
+                connectionState = .connected
                 errorMessage = nil
             } catch {
-                isConfigured = false
-                errorMessage = error.localizedDescription
+                let msg = error.localizedDescription
+                log.error("Connect failed: \(msg)")
+                connectionState = .failed(msg)
+                errorMessage = msg
             }
         }
     }
+
+    func cancelAuth() {
+        connectionState = .disconnected
+        authCode = ""
+        errorMessage = nil
+    }
+
+    func disconnect() {
+        client = nil
+        isConfigured = false
+        connectionState = .disconnected
+        serverURL = ""
+        token = ""
+        serverName = ""
+        authCode = ""
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKey.serverURL)
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKey.plexToken)
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKey.serverName)
+    }
+
+    private func verifySavedConnection(token: String) {
+        Task { @MainActor in
+            guard !isConfigured else { return }
+            let savedURL = self.serverURL
+            if !savedURL.isEmpty {
+                let testClient = PlexClient(serverURL: savedURL, token: token)
+                do {
+                    try await testClient.ping()
+                    client = testClient
+                    isConfigured = true
+                    connectionState = .connected
+                    errorMessage = nil
+                    return
+                } catch {
+                    log.info("Saved URL \(savedURL) unreachable, rediscovering…")
+                }
+            }
+            await rediscover(token: token)
+        }
+    }
+
+    private func rediscover(token: String) async {
+        do {
+            let (name, uris) = try await authManager.discoverServers(token: token)
+            serverName = name
+            UserDefaults.standard.set(name, forKey: UserDefaultsKey.serverName)
+            try await connectToServer(uris: uris, token: token)
+            isConfigured = true
+            connectionState = .connected
+        } catch {
+            log.error("Rediscover failed: \(error.localizedDescription)")
+            isConfigured = false
+            connectionState = .disconnected
+        }
+    }
+
+    /// Try each URI until one responds. Exits early if already configured.
+    private func connectToServer(uris: [String], token: String) async throws {
+        var lastError: Error = PlexodoroError.serverUnreachable
+
+        for uri in uris {
+            if isConfigured { log.info("Already connected, skipping remaining retries"); return }
+            log.info("Trying \(uri)…")
+            let testClient = PlexClient(serverURL: uri, token: token)
+            do {
+                try await testClient.ping()
+                log.info("Connected at \(uri)")
+                serverURL = uri
+                UserDefaults.standard.set(uri, forKey: UserDefaultsKey.serverURL)
+                client = testClient
+                return
+            } catch {
+                log.warning("  \(uri) failed: \(error.localizedDescription)")
+                lastError = error
+            }
+        }
+
+        throw lastError
+    }
+
+    // MARK: - Pomodoro
 
     func startPomodoro() {
         startPomodoro(seedTrackId: nil)
@@ -70,51 +178,56 @@ class AppState: ObservableObject {
             do {
                 let seedTrack = try await resolveSeedTrack(seedTrackId: seedTrackId, client: client)
                 let (packed, urls, totalSeconds) = try await preparePackedTracks(seedTrack: seedTrack, client: client)
-
-                player.onTrackFinished = { [weak self] in
-                    self?.advanceToNextTrack()
-                }
-                player.onPlaylistFinished = { [weak self] in
-                    self?.finishAndReset()
-                }
-                player.onStoppedAtTrackEnd = { [weak self] in
-                    self?.finishAndReset()
-                }
-
-                timeRemaining = totalSeconds
-                // Show the full shuffled playlist immediately
-                playlistTracks = packed
-                currentTrackIndex = 0
-                if let first = packed.first {
-                    currentTrackTitle = "\(first.artist) — \(first.title)"
-                }
-
-                isDownloading = true
-                let localURLs = await player.download(tracks: packed, urls: urls)
-                isDownloading = false
-
-                // Filter to successfully downloaded tracks only
-                let downloadedIndices = localURLs.enumerated().compactMap { $1 != nil ? $0 : nil }
-                playlistTracks = downloadedIndices.map { packed[$0] }
-                currentTrackIndex = 0
-                if let first = playlistTracks.first {
-                    currentTrackTitle = "\(first.artist) — \(first.title)"
-                }
-
-                guard !playlistTracks.isEmpty else {
-                    errorMessage = "No tracks could be downloaded"
-                    state = .idle
-                    return
-                }
-
-                let validURLs = localURLs.compactMap { $0 }
-                await player.play(urls: validURLs)
-                startTimer(duration: totalSeconds)
+                try await startPlayback(tracks: packed, urls: urls, totalSeconds: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription
                 state = .idle
             }
         }
+    }
+
+    private func configurePlayerCallbacks() {
+        player.onTrackFinished = { [weak self] in
+            self?.advanceToNextTrack()
+        }
+        player.onPlaylistFinished = { [weak self] in
+            self?.finishAndReset()
+        }
+        player.onStoppedAtTrackEnd = { [weak self] in
+            self?.finishAndReset()
+        }
+        player.onTrackDownloaded = { [weak self] track in
+            guard let self = self else { return }
+            if let idx = self.playlistTracks.firstIndex(where: { $0.id == track.id }) {
+                self.playlistTracks[idx].isDownloaded = true
+            }
+        }
+    }
+
+    private func startPlayback(tracks: [Track], urls: [URL], totalSeconds: TimeInterval) async throws {
+        configurePlayerCallbacks()
+
+        timeRemaining = totalSeconds
+        playlistTracks = tracks
+        currentTrackIndex = 0
+        currentTrackTitle = tracks.first.map { "\($0.artist) — \($0.title)" } ?? ""
+
+        isDownloading = true
+        playlistTracks = await player.downloadAndPlay(tracks: tracks, urls: urls)
+        isDownloading = false
+
+        guard state == .running else { return }
+
+        currentTrackIndex = 0
+        if let first = playlistTracks.first {
+            currentTrackTitle = "\(first.artist) — \(first.title)"
+        } else {
+            errorMessage = "No tracks could be downloaded"
+            state = .idle
+            return
+        }
+
+        startTimer(duration: totalSeconds)
     }
 
     private func advanceToNextTrack() {
@@ -145,7 +258,6 @@ class AppState: ObservableObject {
         let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
         let withoutSeed = nearest.filter { $0.id != seedTrack.id }
         let engine = PomodoroEngine()
-        // Subtract seed track duration so the total (including seed) lands near 25 min
         let seedSec = seedTrack.duration / 1000
         let adjustedTarget = max(PomodoroConfig.default.targetDuration - seedSec, PomodoroConfig.default.tolerance)
         var packed = engine.pack(tracks: withoutSeed, target: adjustedTarget)
@@ -219,5 +331,17 @@ class AppState: ObservableObject {
         let mins = Int(timeRemaining) / 60
         let secs = Int(timeRemaining) % 60
         return String(format: "%02d:%02d", mins, secs)
+    }
+}
+
+// MARK: - Connection State
+
+extension AppState {
+    enum ConnectionState: Equatable {
+        case disconnected
+        case linking
+        case discovering
+        case connected
+        case failed(String)
     }
 }

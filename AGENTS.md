@@ -11,7 +11,7 @@ macOS menu-bar app — Pomodoro timer synced with Plex music playback (Spotify s
 
 ## Dependencies
 
-- **RxSwift** — reactive framework of choice (added via SPM). Existing code still uses **Combine** (to be migrated gradually).
+- **swift-log** — structured logging (Apple ecosystem stdlib). 
 - No other external deps — Apple SDKs only (SwiftUI, AVFoundation, Combine, OSLog, XCTest).
 
 ## Architecture
@@ -35,12 +35,18 @@ Music provider is now a protocol so Plex/Spotify are interchangeable:
 
 | File | Role |
 |------|------|
-| `PlexodoroApp.swift` | Entrypoint, all SwiftUI views (ContentView, ActiveSessionView, SettingsView) |
+| `PlexodoroApp.swift` | Entrypoint — `@main` App struct only |
+| `ContentView.swift` | Root content router (idle, active, settings, connection states) |
+| `ActiveSessionView.swift` | Running pomodoro view (timer, album art, playlist, controls) |
+| `PlaylistView.swift` | Track list during active session |
+| `SearchBar.swift` | Seed-track search with results list |
+| `ConnectView.swift`, `LinkingView.swift`, `DiscoveringView.swift`, `FailedView.swift` | OAuth connection flow views |
+| `SettingsView.swift` | Connection info + disconnect |
 | `AppState.swift` | ViewModel — timer, playlist, orchestrates PlexClient + AudioPlayer |
 | `PlexClient.swift` | Actor-based Plex API client (search, nearest, sessions, stream URLs) conforming `MusicProvider` |
 | `MusicProvider.swift` | `MusicProvider` protocol — abstracts search, playback URLs, session |
 | `AudioPlayer.swift` | AVQueuePlayer wrapper, sequential download + cleanup |
-| `PomodoroEngine.swift` | Track-packing algorithm |
+| `PomodoroEngine.swift` | Track-packing algorithm (lookahead random + greedy fill) |
 | `Models.swift` | Track, JSON decoding types (CodingKeys), errors |
 | `AlbumArt.swift` | Async album art via URLSession + CertDelegate |
 | `CertDelegate.swift` | Trusts all server certs (self-signed Plex on LAN) |

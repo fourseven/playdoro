@@ -7,14 +7,13 @@ let package = Package(
         .macOS(.v13)
     ],
     dependencies: [
-        .package(url: "https://github.com/ReactiveX/RxSwift.git", from: "6.10.2"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
         .executableTarget(
             name: "Plexodoro",
             dependencies: [
-                .product(name: "RxSwift", package: "RxSwift"),
-                .product(name: "RxCocoa", package: "RxSwift"),
+                .product(name: "Logging", package: "swift-log"),
             ],
             exclude: ["Info.plist"]
         ),
@@ -22,8 +21,6 @@ let package = Package(
             name: "PlexodoroTests",
             dependencies: [
                 "Plexodoro",
-                .product(name: "RxSwift", package: "RxSwift"),
-                .product(name: "RxTest", package: "RxSwift"),
             ]
         ),
     ]

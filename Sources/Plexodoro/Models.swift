@@ -3,6 +3,8 @@ import Foundation
 enum UserDefaultsKey {
     static let serverURL = "serverURL"
     static let plexToken = "plexToken"
+    static let serverName = "serverName"
+    static let plexClientId = "plexClientId"
 }
 
 func deduplicate(tracks: [Track]) -> [Track] {
@@ -19,6 +21,7 @@ struct Track: Identifiable, Equatable {
     let key: String
     let thumb: String?
     let score: Double?
+    var isDownloaded = false
 }
 
 struct PlexSession {
@@ -46,6 +49,9 @@ enum PlexodoroError: LocalizedError {
     case noSonicAnalysis
     case noAudioURL
     case playbackFailed
+    case authTimeout
+    case noServerFound
+    case authCancelled
 
     var errorDescription: String? {
         switch self {
@@ -54,6 +60,9 @@ enum PlexodoroError: LocalizedError {
         case .noSonicAnalysis: "Sonic analysis is not enabled on your library"
         case .noAudioURL: "Could not get audio stream URL for tracks"
         case .playbackFailed: "Failed to start audio playback"
+        case .authTimeout: "Authorization timed out. Please try again."
+        case .noServerFound: "No Plex server found on your network"
+        case .authCancelled: "Authorization cancelled"
         }
     }
 }
@@ -125,4 +134,45 @@ struct PlexPartJSON: Decodable {
 
 struct PlexPlayerJSON: Decodable {
     let state: String
+}
+
+// MARK: - OAuth Models
+
+struct PlexPinResponse: Decodable {
+    let id: Int
+    let code: String
+    let trusted: Bool
+    let clientIdentifier: String
+    let product: String
+    let qr: String?
+    let authToken: String?
+    let expiresAt: String
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, code, trusted, qr, product
+        case clientIdentifier = "clientIdentifier"
+        case authToken = "authToken"
+        case expiresAt = "expiresAt"
+        case createdAt = "createdAt"
+    }
+}
+
+struct PlexResource: Decodable {
+    let name: String
+    let product: String?
+    let provides: String?
+    let owned: Bool?
+    let accessToken: String?
+    let connections: [PlexResourceConnection]?
+    let lastSeenAt: String?
+}
+
+struct PlexResourceConnection: Decodable {
+    let uri: String
+    let local: Bool?
+    let address: String?
+    let port: Int?
+    let status: Int?
+    let message: String?
 }

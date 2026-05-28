@@ -1,8 +1,8 @@
 import AVFoundation
 import Foundation
-import OSLog
+import Logging
 
-private let log = Logger(subsystem: "com.mathewhartley.plexodoro", category: "AudioPlayer")
+private let log = Logger(label: "com.plexodoro.audioplayer")
 private let fileLogURL = FileManager.default.temporaryDirectory.appendingPathComponent("plexodoro_audio_player.log")
 private let dateFormatter: DateFormatter = {
     let f = DateFormatter()
@@ -10,7 +10,7 @@ private let dateFormatter: DateFormatter = {
     return f
 }()
 private func fileLog(_ message: String) {
-    log.log("\(message, privacy: .public)")
+    log.info("\(message)")
     let line = "[\(dateFormatter.string(from: Date()))] \(message)\n"
     if let data = line.data(using: .utf8) {
         if FileManager.default.fileExists(atPath: fileLogURL.path) {
@@ -25,7 +25,7 @@ private func fileLog(_ message: String) {
     }
 }
 private func fileErr(_ message: String) {
-    log.error("\(message, privacy: .public)")
+    log.error("\(message)")
     fileLog("ERROR: \(message)")
 }
 
@@ -33,6 +33,7 @@ private func fileErr(_ message: String) {
 class AudioPlayer: ObservableObject {
     @Published var isPlaying = false
     @Published var downloadProgress: Double = 0
+    @Published var currentProgress: Double = 0
 
     private var player: AVQueuePlayer?
     private var boundaryObserver: Any?
@@ -42,6 +43,8 @@ class AudioPlayer: ObservableObject {
     private var tempFiles: [URL] = []
     private var playSessionID = UUID()
     private var playerItems: [AVPlayerItem] = []
+    private var playlistEndIndex = -1
+    private var progressTimer: Timer?
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -52,6 +55,7 @@ class AudioPlayer: ObservableObject {
     var onTrackFinished: (() -> Void)?
     var onPlaylistFinished: (() -> Void)?
     var onStoppedAtTrackEnd: (() -> Void)?
+    var onTrackDownloaded: ((Track) -> Void)?
 
     var remainingOnCurrentTrack: TimeInterval {
         guard let player = player, let item = player.currentItem else { return 0 }
@@ -61,7 +65,25 @@ class AudioPlayer: ObservableObject {
         return max(0, duration - current)
     }
 
-    // MARK: - Downloads
+    // MARK: - Download Stream
+
+    private struct LocalTrack {
+        let track: Track
+        let url: URL
+    }
+
+    private func downloadStream(tracks: [Track], urls: [URL]) -> AsyncStream<LocalTrack> {
+        AsyncStream { continuation in
+            Task {
+                for (i, url) in urls.enumerated() {
+                    if let localURL = await downloadTrack(i, url: url, track: tracks[i]) {
+                        continuation.yield(LocalTrack(track: tracks[i], url: localURL))
+                    }
+                }
+                continuation.finish()
+            }
+        }
+    }
 
     private func downloadTrack(_ i: Int, url: URL, track: Track) async -> URL? {
         fileLog("Downloading track \(i): \(track.title)")
@@ -111,95 +133,122 @@ class AudioPlayer: ObservableObject {
         }
     }
 
-    func download(tracks: [Track], urls: [URL]) async -> [URL?] {
-        try? FileManager.default.removeItem(at: fileLogURL)
-        fileLog("Downloading \(tracks.count) tracks sequentially...")
-        var results: [URL?] = []
+    // MARK: - Download & Play
 
-        for (i, url) in urls.enumerated() {
-            let result = await downloadTrack(i, url: url, track: tracks[i])
-            results.append(result)
+    func downloadAndPlay(tracks: [Track], urls: [URL]) async -> [Track] {
+        try? FileManager.default.removeItem(at: fileLogURL)
+        fileLog("Downloading \(tracks.count) tracks, playing first immediately...")
+
+        let sessionID = startNewSession()
+        var successfulTracks: [Track] = []
+
+        for await local in downloadStream(tracks: tracks, urls: urls) {
+            guard playSessionID == sessionID else { return cancelSession() }
+            enqueueDownloadedTrack(local: local, sessionID: sessionID, successfulTracks: &successfulTracks)
         }
 
-        let successCount = results.compactMap({ $0 }).count
-        fileLog("Downloads complete: \(successCount)/\(tracks.count) succeeded")
-        return results
+        return finalizePlayback(successfulTracks: successfulTracks, expected: tracks.count)
     }
 
-    // MARK: - Playback
-
-    func play(urls: [URL]) async {
-        fileLog("play() called with \(urls.count) URLs")
-        // Save the newly downloaded temp files before stop() cleans them up
-        let savedTempFiles = tempFiles
-        tempFiles = []
+    private func startNewSession() -> UUID {
         stop()
-        tempFiles = savedTempFiles
-
         let sessionID = UUID()
         playSessionID = sessionID
         hasHandledPlaylistEnd = false
+        playlistEndIndex = -1
+        return sessionID
+    }
 
-        let items = urls.map(AVPlayerItem.init)
-        self.playerItems = items
+    private func enqueueDownloadedTrack(local: LocalTrack, sessionID: UUID, successfulTracks: inout [Track]) {
+        var track = local.track
+        track.isDownloaded = true
+        successfulTracks.append(track)
+        onTrackDownloaded?(track)
 
-        // Observe each item's status so we know when they're ready
-        for (i, item) in items.enumerated() {
-            let obs = item.observe(\.status, options: [.new, .old]) { item, _ in
-                let label = statusLabel(item.status)
-                fileLog("Item \(i) status: \(item.status.rawValue) (\(label))")
-                if item.status == .failed, let err = item.error {
-                    fileErr("  Item \(i) error: \(err.localizedDescription)")
-                    fileErr("  Error domain: \((err as NSError).domain), code: \((err as NSError).code)")
-                }
-            }
-            itemStatusObservations.append(obs)
-            fileLog("  Item \(i): url=\(urls[i].lastPathComponent)")
+        let item = AVPlayerItem(url: local.url)
+        playerItems.append(item)
+
+        let trackIndex = successfulTracks.count - 1
+        addObservers(to: item, index: trackIndex, sessionID: sessionID)
+        fileLog("  Item \(trackIndex): url=\(local.url.lastPathComponent)")
+
+        if player == nil {
+            fileLog("Creating AVQueuePlayer with first track")
+            let queuePlayer = AVQueuePlayer(items: [item])
+            self.player = queuePlayer
+            queuePlayer.play()
+            isPlaying = true
+            startProgressUpdates()
+            fileLog("Playback started, rate: \(queuePlayer.rate)")
+        } else {
+            player?.insert(item, after: nil)
+            fileLog("Inserted track \(trackIndex), queue: \(player?.items().count ?? 0)")
+        }
+    }
+
+    private func cancelSession() -> [Track] {
+        fileLog("Session expired (stop was called), discarding remaining downloads")
+        for url in tempFiles { try? FileManager.default.removeItem(at: url) }
+        tempFiles = []
+        return []
+    }
+
+    private func finalizePlayback(successfulTracks: [Track], expected: Int) -> [Track] {
+        let totalTracks = successfulTracks.count
+        fileLog("Downloads complete: \(totalTracks)/\(expected) succeeded")
+
+        guard totalTracks > 0 else {
+            fileErr("No tracks downloaded successfully")
+            return []
         }
 
-        fileLog("Creating AVQueuePlayer(items:) with \(items.count) items")
-        let queuePlayer = AVQueuePlayer(items: items)
-        self.player = queuePlayer
+        playlistEndIndex = totalTracks - 1
 
-        // Log the queue state
-        fileLog("Queue items after creation: \(queuePlayer.items().count)")
-        fileLog("Current item: \(queuePlayer.currentItem != nil ? "set" : "nil")")
-
-        // Per-item end observers — each knows its own index
-        for (index, item) in items.enumerated() {
-            let observer = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { [weak self] _ in
-                fileLog("AVPlayerItemDidPlayToEndTime for item \(index)")
-                guard let self = self else { return }
-                Task { @MainActor in
-                    guard self.playSessionID == sessionID,
-                          !self.hasHandledPlaylistEnd else {
-                        fileLog("  Ignored (session mismatch or already handled)")
-                        return
-                    }
-
-                    if index < items.count - 1 {
-                        fileLog("  Track \(index) ended, signalling onTrackFinished")
-                        self.onTrackFinished?()
-                    } else {
-                        fileLog("  Last track ended, playlist finished")
-                        self.hasHandledPlaylistEnd = true
-                        self.isPlaying = false
-                        self.onPlaylistFinished?()
-                    }
-                }
-            }
-            itemEndObservers.append(observer)
+        if let player, player.items().isEmpty, isPlaying {
+            fileLog("Queue already empty — signalling playlist end")
+            hasHandledPlaylistEnd = true
+            isPlaying = false
+            onPlaylistFinished?()
         }
 
-        fileLog("Calling queuePlayer.play()")
-        queuePlayer.play()
-        isPlaying = true
-        fileLog("AVQueuePlayer rate after play: \(queuePlayer.rate)")
-        fileLog("Current item after play: \(queuePlayer.currentItem != nil ? "\(queuePlayer.currentItem!.status.rawValue)" : "nil")")
+        return successfulTracks
+    }
+
+    private func addObservers(to item: AVPlayerItem, index: Int, sessionID: UUID) {
+        let statusObs = item.observe(\.status, options: [.new, .old]) { item, _ in
+            let label = statusLabel(item.status)
+            fileLog("Item \(index) status: \(item.status.rawValue) (\(label))")
+            if item.status == .failed, let err = item.error {
+                fileErr("  Item \(index) error: \(err.localizedDescription)")
+            }
+        }
+        itemStatusObservations.append(statusObs)
+
+        let endObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            fileLog("AVPlayerItemDidPlayToEndTime for track \(index)")
+            guard let self = self else { return }
+            Task { @MainActor in
+                guard self.playSessionID == sessionID, !self.hasHandledPlaylistEnd else {
+                    fileLog("  Ignored")
+                    return
+                }
+
+                if index == self.playlistEndIndex {
+                    fileLog("  Last track — playlist finished")
+                    self.hasHandledPlaylistEnd = true
+                    self.isPlaying = false
+                    self.onPlaylistFinished?()
+                } else {
+                    fileLog("  Track ended, signalling onTrackFinished")
+                    self.onTrackFinished?()
+                }
+            }
+        }
+        itemEndObservers.append(endObs)
     }
 
     func stopAfterCurrentTrack() {
@@ -250,6 +299,8 @@ class AudioPlayer: ObservableObject {
     func stop() {
         fileLog("STOP — playSessionID was \(playSessionID)")
         playSessionID = UUID()
+        playlistEndIndex = -1
+        stopProgressUpdates()
         removeObservers()
         player?.pause()
         fileLog("  player.pause(), rate=\(player?.rate ?? -1.0)")
@@ -259,6 +310,38 @@ class AudioPlayer: ObservableObject {
         isPlaying = false
         cleanupTempFiles()
         fileLog("STOP complete")
+    }
+
+    // MARK: - Progress
+
+    private func startProgressUpdates() {
+        stopProgressUpdates()
+        refreshProgress()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshProgress()
+            }
+        }
+    }
+
+    private func stopProgressUpdates() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+        currentProgress = 0
+    }
+
+    private func refreshProgress() {
+        guard let player = player, let item = player.currentItem else {
+            currentProgress = 0
+            return
+        }
+        let duration = CMTimeGetSeconds(item.duration)
+        let current = CMTimeGetSeconds(player.currentTime())
+        guard duration.isFinite, current.isFinite, duration > 0 else {
+            currentProgress = 0
+            return
+        }
+        currentProgress = current / duration
     }
 
     // MARK: - Cleanup

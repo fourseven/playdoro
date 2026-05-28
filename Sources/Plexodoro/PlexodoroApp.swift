@@ -9,19 +9,18 @@ struct PlexodoroApp: App {
             ContentView(appState: appState)
         }
         .menuBarExtraStyle(.window)
-
-        Settings {
-            SettingsView(appState: appState)
-        }
     }
 }
 
 struct ContentView: View {
     @ObservedObject var appState: AppState
+    @State private var showSettings = false
 
     var body: some View {
         VStack(spacing: 12) {
-            if !appState.isConfigured {
+            if showSettings {
+                settingsContent
+            } else if !appState.isConfigured {
                 VStack(spacing: 8) {
                     Text("Plexodoro")
                         .font(.headline)
@@ -38,11 +37,18 @@ struct ContentView: View {
 
             Divider()
 
-            Button("Settings…") {
-                openSettings()
+            if showSettings {
+                Button("Done") {
+                    showSettings = false
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Button("Settings…") {
+                    showSettings = true
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
             }
-            .buttonStyle(.plain)
-            .font(.caption)
 
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
@@ -52,22 +58,6 @@ struct ContentView: View {
         }
         .padding()
         .frame(width: 240)
-    }
-
-    private func openSettings() {
-        if let existing = NSApp.windows.first(where: { $0.identifier?.rawValue == "plexodoro-settings" }) {
-            existing.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        let window = NSWindow(
-            contentViewController: NSHostingController(rootView: SettingsView(appState: appState))
-        )
-        window.title = "Settings"
-        window.identifier = NSUserInterfaceItemIdentifier("plexodoro-settings")
-        window.setContentSize(NSSize(width: 400, height: 160))
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private var idleView: some View {
@@ -116,13 +106,9 @@ struct ContentView: View {
             }
         }
     }
-}
 
-struct SettingsView: View {
-    @ObservedObject var appState: AppState
-
-    var body: some View {
-        Form {
+    private var settingsContent: some View {
+        VStack(spacing: 12) {
             TextField("Plex Server URL", text: $appState.serverURL)
                 .textFieldStyle(.roundedBorder)
 
@@ -154,7 +140,6 @@ struct SettingsView: View {
                     .foregroundColor(.red)
             }
         }
-        .padding()
-        .frame(width: 400)
+        .padding(.vertical, 4)
     }
 }

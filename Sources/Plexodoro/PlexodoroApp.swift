@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var searchText = ""
     @State private var searchResults: [PlexTrack] = []
+    @State private var searchError: String?
     @State private var isSearching = false
     @State private var searchTaskID = UUID()
 
@@ -115,6 +116,10 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxHeight: 200)
+            } else if let error = searchError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
             } else if !searchText.isEmpty && !isSearching {
                 Text("No tracks found")
                     .font(.caption)
@@ -208,15 +213,17 @@ struct ContentView: View {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
             searchResults = []
+            searchError = nil
             isSearching = false
             return
         }
 
+        searchError = nil
         let taskID = UUID()
         searchTaskID = taskID
         isSearching = true
 
-        Task {
+        Task { @MainActor in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard taskID == searchTaskID else { return }
             await performSearch(query: trimmed, taskID: taskID)
@@ -234,6 +241,7 @@ struct ContentView: View {
         } catch {
             guard taskID == searchTaskID else { return }
             searchResults = []
+            searchError = error.localizedDescription
             isSearching = false
         }
     }

@@ -89,6 +89,12 @@ actor PlexClient {
         try decoder.decode(PlexResponse.self, from: data).mediaContainer
     }
 
+    func getTrack(id: Int) async throws -> PlexTrack? {
+        let data = try await fetchJSON(path: "/library/metadata/\(id)")
+        let container = try decodeContainer(from: data)
+        return container.metadata?.first?.toTrack
+    }
+
     func searchTracks(query: String, limit: Int = 20) async throws -> [PlexTrack] {
         log.debug("Searching: '\(query, privacy: .public)'")
         let data = try await fetchJSON(
@@ -146,6 +152,14 @@ actor PlexClient {
         )
         let container = try decodeContainer(from: data)
         return (container.metadata ?? []).map { $0.toTrack }
+    }
+
+    nonisolated func thumbURL(for track: PlexTrack) -> URL? {
+        guard let thumb = track.thumb else { return nil }
+        let item = URLQueryItem(name: "X-Plex-Token", value: token)
+        var components = URLComponents(string: serverURL + thumb)!
+        components.queryItems = [item]
+        return components.url
     }
 
     nonisolated func streamURL(for track: PlexTrack) -> URL? {

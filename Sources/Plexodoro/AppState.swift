@@ -64,29 +64,38 @@ class AppState: ObservableObject {
 
         Task {
             do {
-                let seedId: Int
+                let seedTrack: PlexTrack
                 if let seedTrackId {
-                    seedId = seedTrackId
-                    currentTrackTitle = ""
+                    guard let track = try await client.getTrack(id: seedTrackId) else {
+                        throw PlexodoroError.noCurrentTrack
+                    }
+                    seedTrack = track
                 } else {
                     guard let session = try await client.getSessions() else {
                         throw PlexodoroError.noCurrentTrack
                     }
-                    currentTrackTitle = "\(session.track.artist) — \(session.track.title)"
-                    seedId = session.track.id
+                    seedTrack = session.track
                 }
+                currentTrackTitle = "\(seedTrack.artist) — \(seedTrack.title)"
 
-                let nearest = try await client.getNearest(trackId: seedId, limit: PomodoroConfig.default.maxCandidates)
+                let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
+                    .filter { $0.id != seedTrack.id }
+
+                let config = PomodoroConfig.default
+                let seedDuration = seedTrack.duration / 1000
+                let remainingTarget = config.targetDuration - seedDuration
                 let engine = PomodoroEngine()
-                let packed = engine.pack(tracks: nearest).shuffled()
-                let totalSeconds = engine.totalDuration(of: packed)
 
-                let urls: [URL] = packed.compactMap { track in
+                let packed = engine.pack(tracks: nearest, target: max(remainingTarget, config.tolerance * 2))
+                let playlist = [seedTrack] + packed.shuffled()
+                let totalSeconds = engine.totalDuration(of: playlist)
+
+                let urls: [URL] = playlist.compactMap { track in
                     guard !track.key.isEmpty else { return nil }
                     return client.streamURL(for: track)
                 }
 
-                guard urls.count == packed.count else {
+                guard urls.count == playlist.count else {
                     throw PlexodoroError.noAudioURL
                 }
 
@@ -109,7 +118,7 @@ class AppState: ObservableObject {
 
                 timeRemaining = totalSeconds
                 player.isDownloading = true
-                await player.play(tracks: packed, urls: urls)
+                await player.play(tracks: playlist, urls: urls)
                 startTimer(duration: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription

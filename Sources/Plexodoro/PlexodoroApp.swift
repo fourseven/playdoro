@@ -66,7 +66,7 @@ struct ContentView: View {
             }
         }
         .padding()
-        .frame(width: 280)
+        .frame(width: 300)
     }
 
     private var idleView: some View {
@@ -146,11 +146,28 @@ struct ContentView: View {
         }
     }
 
+    private var currentThumbURL: URL? {
+        let i = appState.player.currentTrackIndex
+        guard i < appState.player.tracks.count,
+              let thumb = appState.player.tracks[i].thumb else { return nil }
+        return URL(string: "\(appState.serverURL)\(thumb)?X-Plex-Token=\(appState.token)")
+    }
+
     private var activeView: some View {
-        VStack(spacing: 8) {
-            Text(appState.formattedTime)
-                .font(.system(.title, design: .monospaced))
-                .contentTransition(.numericText())
+        VStack(spacing: 6) {
+            // Album art behind timer
+            ZStack {
+                AlbumArt(url: currentThumbURL)
+                    .frame(width: 140, height: 140)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                Text(appState.formattedTime)
+                    .font(.system(size: 36, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 4)
+                    .contentTransition(.numericText())
+            }
+            .padding(.vertical, 4)
 
             if !appState.currentTrackTitle.isEmpty {
                 Text(appState.currentTrackTitle)
@@ -172,24 +189,25 @@ struct ContentView: View {
             if !appState.player.tracks.isEmpty {
                 Divider()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 1) {
                         ForEach(Array(appState.player.tracks.enumerated()), id: \.element.id) { i, track in
                             HStack(spacing: 4) {
                                 if appState.player.isDownloading {
                                     Image(systemName: "arrow.down.circle")
-                                        .font(.system(size: 8))
+                                        .font(.system(size: 7))
                                         .foregroundColor(.secondary)
                                 } else if i == appState.player.currentTrackIndex {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 8))
+                                        .font(.system(size: 7))
                                         .foregroundColor(.green)
                                 } else {
                                     Text("\(i + 1).")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
+                                        .frame(width: 12, alignment: .trailing)
                                 }
                                 Text(track.title)
-                                    .font(.caption)
+                                    .font(.caption2)
                                     .lineLimit(1)
                                 Text(track.artist)
                                     .font(.caption2)
@@ -197,13 +215,13 @@ struct ContentView: View {
                                     .lineLimit(1)
                             }
                             .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
+                            .padding(.vertical, 1)
                             .background(i == appState.player.currentTrackIndex ? Color.green.opacity(0.1) : Color.clear)
-                            .cornerRadius(3)
+                            .cornerRadius(2)
                         }
                     }
                 }
-                .frame(maxHeight: 150)
+                .frame(maxHeight: 100)
             }
 
             HStack(spacing: 12) {
@@ -214,13 +232,14 @@ struct ContentView: View {
                         Image(systemName: appState.player.isPlaying ? "pause.fill" : "play.fill")
                     }
                     .buttonStyle(.bordered)
-                    .help("Play / Pause")
+                    .controlSize(.small)
 
                     Button("Stop") {
                         appState.stopPomodoro()
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
+                    .controlSize(.small)
                 }
             }
 

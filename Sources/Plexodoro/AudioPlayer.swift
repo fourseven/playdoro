@@ -11,6 +11,7 @@ class AudioPlayer: ObservableObject {
 
     private(set) var tracks: [PlexTrack] = []
     private var player: AVQueuePlayer?
+    private var mediaLoader: MediaLoader?
     private var boundaryObserver: Any?
     private var itemEndObserver: NSObjectProtocol?
     private var hasHandledPlaylistEnd = false
@@ -34,7 +35,13 @@ class AudioPlayer: ObservableObject {
         log.log("Playing \(tracks.count) tracks")
         log.log("First URL: \(urls.first?.absoluteString ?? "none", privacy: .public)")
 
-        let items = urls.map(AVPlayerItem.init)
+        let loader = MediaLoader()
+        self.mediaLoader = loader
+        let items = urls.map { url in
+            let asset = AVURLAsset(url: url)
+            asset.resourceLoader.setDelegate(loader, queue: .main)
+            return AVPlayerItem(asset: asset)
+        }
         let queuePlayer = AVQueuePlayer(items: items)
         self.player = queuePlayer
 
@@ -92,6 +99,7 @@ class AudioPlayer: ObservableObject {
         removeObservers()
         player?.pause()
         player?.removeAllItems()
+        mediaLoader = nil
         isPlaying = false
     }
 

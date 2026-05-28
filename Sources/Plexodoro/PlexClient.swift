@@ -150,9 +150,11 @@ actor PlexClient {
 
     nonisolated func streamURL(for track: PlexTrack) -> URL? {
         guard !track.key.isEmpty else { return nil }
+        let item = URLQueryItem(name: "X-Plex-Token", value: token)
         var components = URLComponents(string: serverURL + track.key)!
-        components.scheme = "http"
-        components.queryItems = [URLQueryItem(name: "X-Plex-Token", value: token)]
-        return components.url
+        components.queryItems = [item]
+        guard let realURL = components.url else { return nil }
+        let schemeURL = "plex-audio://" + realURL.absoluteString.dropFirst("https://".count)
+        return URL(string: schemeURL)
     }
 }

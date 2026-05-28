@@ -77,7 +77,7 @@ class AppState: ObservableObject {
 
                 let nearest = try await client.getNearest(trackId: seedId)
                 let engine = PomodoroEngine()
-                let packed = engine.pack(tracks: nearest)
+                let packed = engine.pack(tracks: nearest).shuffled()
                 let totalSeconds = engine.totalDuration(of: packed)
 
                 let urls: [URL] = packed.compactMap { track in

@@ -145,6 +145,19 @@ class AudioPlayer: ObservableObject {
         }
     }
 
+    func togglePlayPause() {
+        guard let player = player else { return }
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+            log.log("Paused")
+        } else {
+            player.play()
+            isPlaying = true
+            log.log("Resumed")
+        }
+    }
+
     func stop() {
         log.log("Stopping playback")
         removeObservers()

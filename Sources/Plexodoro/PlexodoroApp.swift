@@ -206,11 +206,23 @@ struct ContentView: View {
                 .frame(maxHeight: 150)
             }
 
-            Button("Stop") {
-                appState.stopPomodoro()
+            HStack(spacing: 12) {
+                if !appState.player.isDownloading {
+                    Button {
+                        appState.player.togglePlayPause()
+                    } label: {
+                        Image(systemName: appState.player.isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Play / Pause")
+
+                    Button("Stop") {
+                        appState.stopPomodoro()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
             }
-            .buttonStyle(.bordered)
-            .tint(.red)
 
             if appState.state == .finished {
                 Text("Pomodoro complete!")

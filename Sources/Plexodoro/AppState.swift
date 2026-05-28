@@ -106,7 +106,8 @@ class AppState: ObservableObject {
                     }
                 }
 
-                player.play(tracks: packed, urls: urls)
+                timeRemaining = totalSeconds
+                await player.play(tracks: packed, urls: urls)
                 startTimer(duration: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription

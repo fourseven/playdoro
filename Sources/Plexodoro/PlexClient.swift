@@ -153,8 +153,6 @@ actor PlexClient {
         let item = URLQueryItem(name: "X-Plex-Token", value: token)
         var components = URLComponents(string: serverURL + track.key)!
         components.queryItems = [item]
-        guard let realURL = components.url else { return nil }
-        let schemeURL = "plex-audio://" + realURL.absoluteString.dropFirst("https://".count)
-        return URL(string: schemeURL)
+        return components.url
     }
 }

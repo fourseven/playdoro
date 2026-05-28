@@ -4,17 +4,40 @@ import OSLog
 
 private let log = Logger(subsystem: "com.mathewhartley.plexodoro", category: "AudioPlayer")
 
+private final class CertDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+}
+
 @MainActor
 class AudioPlayer: ObservableObject {
     @Published var isPlaying = false
+    @Published var isDownloading = false
     @Published var currentTrackIndex = 0
+    @Published var downloadProgress: Double = 0
 
     private(set) var tracks: [PlexTrack] = []
     private var player: AVQueuePlayer?
-    private var mediaLoader: MediaLoader?
     private var boundaryObserver: Any?
     private var itemEndObserver: NSObjectProtocol?
     private var hasHandledPlaylistEnd = false
+    private var tempFiles: [URL] = []
+
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        return URLSession(configuration: config, delegate: CertDelegate(), delegateQueue: nil)
+    }()
 
     var onPlaylistFinished: (() -> Void)?
     var onStoppedAtTrackEnd: (() -> Void)?
@@ -27,21 +50,49 @@ class AudioPlayer: ObservableObject {
         return max(0, duration - current)
     }
 
-    func play(tracks: [PlexTrack], urls: [URL]) {
+    func play(tracks: [PlexTrack], urls: [URL]) async {
         self.tracks = tracks
         currentTrackIndex = 0
         hasHandledPlaylistEnd = false
+        downloadProgress = 0
+        isDownloading = true
 
-        log.log("Playing \(tracks.count) tracks")
+        log.log("Downloading \(tracks.count) tracks...")
         log.log("First URL: \(urls.first?.absoluteString ?? "none", privacy: .public)")
 
-        let loader = MediaLoader()
-        self.mediaLoader = loader
-        let items = urls.map { url in
-            let asset = AVURLAsset(url: url)
-            asset.resourceLoader.setDelegate(loader, queue: .main)
-            return AVPlayerItem(asset: asset)
+        var localURLs: [URL] = []
+        for (i, url) in urls.enumerated() {
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { continue }
+            components.scheme = "https"
+            guard let realURL = components.url else { continue }
+
+            do {
+                let (data, response) = try await session.data(from: realURL)
+                let mime = response.mimeType ?? "bin"
+                let ext = realURL.pathExtension.isEmpty ? "bin" : realURL.pathExtension
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("\(i)_\(tracks[i].id)")
+                    .appendingPathExtension(ext)
+                try data.write(to: tempURL)
+                localURLs.append(tempURL)
+                self.tempFiles.append(tempURL)
+                downloadProgress = Double(i + 1) / Double(urls.count)
+                log.log("Downloaded \(i+1)/\(tracks.count): \(data.count) bytes (\(mime))")
+            } catch {
+                log.error("Download failed for track \(i): \(error.localizedDescription, privacy: .public)")
+                continue
+            }
         }
+
+        isDownloading = false
+
+        guard !localURLs.isEmpty else {
+            log.error("No tracks downloaded")
+            return
+        }
+
+        log.log("Creating AVPlayer with \(localURLs.count) local files")
+        let items = localURLs.map(AVPlayerItem.init)
         let queuePlayer = AVQueuePlayer(items: items)
         self.player = queuePlayer
 
@@ -69,7 +120,7 @@ class AudioPlayer: ObservableObject {
 
         queuePlayer.play()
         isPlaying = true
-        log.log("AVQueuePlayer.play() called")
+        log.log("AVQueuePlayer.play() called, rate=\(queuePlayer.rate)")
     }
 
     func stopAfterCurrentTrack() {
@@ -99,15 +150,15 @@ class AudioPlayer: ObservableObject {
         removeObservers()
         player?.pause()
         player?.removeAllItems()
-        mediaLoader = nil
         isPlaying = false
+        cleanupTempFiles()
     }
 
-    func skipToNext() {
-        player?.advanceToNextItem()
-        if let player = player {
-            currentTrackIndex = tracks.count - player.items().count
+    private func cleanupTempFiles() {
+        for url in tempFiles {
+            try? FileManager.default.removeItem(at: url)
         }
+        tempFiles = []
     }
 
     private func removeBoundaryObserver() {
@@ -123,5 +174,4 @@ class AudioPlayer: ObservableObject {
             itemEndObserver = nil
         }
     }
-
 }

@@ -159,13 +159,27 @@ struct ContentView: View {
                     .lineLimit(2)
             }
 
+            if appState.player.isDownloading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Downloading tracks…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             if !appState.player.tracks.isEmpty {
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(appState.player.tracks.enumerated()), id: \.element.id) { i, track in
                             HStack(spacing: 4) {
-                                if i == appState.player.currentTrackIndex {
+                                if appState.player.isDownloading {
+                                    Image(systemName: "arrow.down.circle")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(.secondary)
+                                } else if i == appState.player.currentTrackIndex {
                                     Image(systemName: "play.fill")
                                         .font(.system(size: 8))
                                         .foregroundColor(.green)

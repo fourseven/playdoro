@@ -1,11 +1,13 @@
 # Plexodoro
 
-macOS menu-bar app — Pomodoro timer synced with Plex music playback (Spotify support planned).
+macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback (Spotify support planned).
 
 ## Build & Test
 
-- `swift build` — build
+- `swift build` — build (macOS)
 - `swift test` — run all tests (XCTest, 16 cases across 3 suites)
+- **iOS:** `xcodebuild -scheme Plexodoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
+- **Device:** `xcodebuild -scheme Plexodoro -destination "platform=iOS,name=<device>" build -allowProvisioningUpdates`
 - No lint, formatter, or CI configured.
 - Single SPM package, no Xcode project (SPM generates one; `DerivedData/` gitignored).
 
@@ -16,7 +18,7 @@ macOS menu-bar app — Pomodoro timer synced with Plex music playback (Spotify s
 
 ## Architecture
 
-- **Entrypoint:** `Sources/Plexodoro/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)`
+- **Entrypoint:** `Sources/Plexodoro/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS)
 - **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicProvider` + `AudioPlayer` directly
 - **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (Plex/Spotify interchangeable)
 - **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicProvider`) — Plex HTTP API with self-signed cert support via `CertDelegate`
@@ -35,7 +37,7 @@ Music provider is now a protocol so Plex/Spotify are interchangeable:
 
 | File | Role |
 |------|------|
-| `PlexodoroApp.swift` | Entrypoint — `@main` App struct only |
+| `PlexodoroApp.swift` | Entrypoint — `@main` App struct only (macOS MenuBarExtra / iOS WindowGroup) |
 | `ContentView.swift` | Root content router (idle, active, settings, connection states) |
 | `ActiveSessionView.swift` | Running pomodoro view (timer, album art, playlist, controls) |
 | `PlaylistView.swift` | Track list during active session |

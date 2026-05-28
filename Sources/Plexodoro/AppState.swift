@@ -145,7 +145,10 @@ class AppState: ObservableObject {
         let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
         let withoutSeed = nearest.filter { $0.id != seedTrack.id }
         let engine = PomodoroEngine()
-        var packed = engine.pack(tracks: withoutSeed)
+        // Subtract seed track duration so the total (including seed) lands near 25 min
+        let seedSec = seedTrack.duration / 1000
+        let adjustedTarget = max(PomodoroConfig.default.targetDuration - seedSec, PomodoroConfig.default.tolerance)
+        var packed = engine.pack(tracks: withoutSeed, target: adjustedTarget)
         packed = deduplicate(tracks: packed)
         packed.append(seedTrack)
         packed.shuffle()

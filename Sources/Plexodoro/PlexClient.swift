@@ -44,6 +44,8 @@ actor PlexClient {
     private func fetchJSON(path: String, query: [URLQueryItem] = [], method: String = "GET") async throws -> Data {
         var req = URLRequest(url: url(path: path, query: query))
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Client-Identifier")
+        req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Product")
         req.httpMethod = method
         req.timeoutInterval = 15
 

@@ -8,7 +8,7 @@ let package = Package(
         .iOS(.v17),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
+        .package(url: "git@github.com:apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
         .executableTarget(

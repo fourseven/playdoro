@@ -1,20 +1,19 @@
 import SwiftUI
 import Logging
 
-@main
-struct PlexodoroApp: App {
+public struct PlexodoroApp: App {
     @StateObject private var appState = AppState()
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     #endif
 
-    init() {
+    public init() {
         LoggingSystem.bootstrap { label in
             StreamLogHandler.standardOutput(label: label)
         }
     }
 
-    var body: some Scene {
+    public var body: some Scene {
         #if os(macOS)
         MenuBarExtra("Plexodoro", systemImage: "timer") {
             ContentView(appState: appState)

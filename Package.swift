@@ -11,17 +11,23 @@ let package = Package(
         .package(url: "git@github.com:apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
+        .target(
+            name: "PlexodoroKit",
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"),
+            ]
+        ),
         .executableTarget(
             name: "Plexodoro",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
+                "PlexodoroKit",
             ],
             exclude: ["Info.plist"]
         ),
         .testTarget(
             name: "PlexodoroTests",
             dependencies: [
-                "Plexodoro",
+                "PlexodoroKit",
             ]
         ),
     ]

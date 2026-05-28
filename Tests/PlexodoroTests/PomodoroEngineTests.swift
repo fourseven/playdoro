@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
-@testable import Plexodoro
+@testable import PlexodoroKit
 
 final class PomodoroEngineTests: XCTestCase {
     // MARK: - Helpers

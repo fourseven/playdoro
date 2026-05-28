@@ -8,12 +8,15 @@ class AppState: ObservableObject {
     @Published var currentTrackTitle: String = ""
     @Published var errorMessage: String?
     @Published var serverURL: String {
-        didSet { UserDefaults.standard.set(serverURL, forKey: "serverURL") }
+        didSet { UserDefaults.standard.set(serverURL, forKey: UserDefaultsKey.serverURL) }
     }
     @Published var token: String {
-        didSet { UserDefaults.standard.set(token, forKey: "plexToken") }
+        didSet { UserDefaults.standard.set(token, forKey: UserDefaultsKey.plexToken) }
     }
     @Published var isConfigured: Bool = false
+    @Published var playlistTracks: [PlexTrack] = []
+    @Published var currentTrackIndex: Int = 0
+    @Published var isDownloading: Bool = false
 
     let player = AudioPlayer()
     var client: PlexClient?
@@ -21,8 +24,8 @@ class AppState: ObservableObject {
     private var isTimerPaused = false
 
     init() {
-        let savedURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://your-plex-server:32400"
-        let savedToken = UserDefaults.standard.string(forKey: "plexToken") ?? ""
+        let savedURL = UserDefaults.standard.string(forKey: UserDefaultsKey.serverURL) ?? "https://your-plex-server:32400"
+        let savedToken = UserDefaults.standard.string(forKey: UserDefaultsKey.plexToken) ?? ""
         self.serverURL = savedURL
         self.token = savedToken
         self.isConfigured = !savedToken.isEmpty
@@ -54,6 +57,7 @@ class AppState: ObservableObject {
     }
 
     func startPomodoro(seedTrackId: Int?) {
+        guard state == .idle else { return }
         guard let client = client else {
             errorMessage = "Configure your Plex server first"
             return
@@ -64,65 +68,108 @@ class AppState: ObservableObject {
 
         Task {
             do {
-                let seedTrack: PlexTrack
-                if let seedTrackId {
-                    guard let track = try await client.getTrack(id: seedTrackId) else {
-                        throw PlexodoroError.noCurrentTrack
-                    }
-                    seedTrack = track
-                } else {
-                    guard let session = try await client.getSessions() else {
-                        throw PlexodoroError.noCurrentTrack
-                    }
-                    seedTrack = session.track
-                }
-                currentTrackTitle = "\(seedTrack.artist) — \(seedTrack.title)"
+                let seedTrack = try await resolveSeedTrack(seedTrackId: seedTrackId, client: client)
+                let (packed, urls, totalSeconds) = try await preparePackedTracks(seedTrack: seedTrack, client: client)
 
-                let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
-                let engine = PomodoroEngine()
-                var packed = engine.pack(tracks: nearest)
-                var seen = Set<String>()
-                packed.removeAll { !seen.insert("\($0.id)-\($0.title)-\($0.artist)").inserted }
-                if !packed.contains(where: { $0.id == seedTrack.id }) {
-                    packed.append(seedTrack)
+                player.onTrackFinished = { [weak self] in
+                    self?.advanceToNextTrack()
                 }
-                packed.shuffle()
-                let totalSeconds = engine.totalDuration(of: packed)
-
-                let urls: [URL] = packed.compactMap { track in
-                    guard !track.key.isEmpty else { return nil }
-                    return client.streamURL(for: track)
-                }
-
-                guard urls.count == packed.count else {
-                    throw PlexodoroError.noAudioURL
-                }
-
                 player.onPlaylistFinished = { [weak self] in
-                    Task { @MainActor in
-                        self?.timerSubscription?.cancel()
-                        self?.state = .finished
-                        try? await Task.sleep(nanoseconds: 5_000_000_000)
-                        self?.resetState()
-                    }
+                    self?.finishAndReset()
                 }
-
                 player.onStoppedAtTrackEnd = { [weak self] in
-                    Task { @MainActor in
-                        self?.state = .finished
-                        try? await Task.sleep(nanoseconds: 5_000_000_000)
-                        self?.resetState()
-                    }
+                    self?.finishAndReset()
                 }
 
                 timeRemaining = totalSeconds
-                player.isDownloading = true
-                await player.play(tracks: packed, urls: urls)
+                // Show the full shuffled playlist immediately
+                playlistTracks = packed
+                currentTrackIndex = 0
+                if let first = packed.first {
+                    currentTrackTitle = "\(first.artist) — \(first.title)"
+                }
+
+                isDownloading = true
+                let localURLs = await player.download(tracks: packed, urls: urls)
+                isDownloading = false
+
+                // Filter to successfully downloaded tracks only
+                let downloadedIndices = localURLs.enumerated().compactMap { $1 != nil ? $0 : nil }
+                playlistTracks = downloadedIndices.map { packed[$0] }
+                currentTrackIndex = 0
+                if let first = playlistTracks.first {
+                    currentTrackTitle = "\(first.artist) — \(first.title)"
+                }
+
+                guard !playlistTracks.isEmpty else {
+                    errorMessage = "No tracks could be downloaded"
+                    state = .idle
+                    return
+                }
+
+                let validURLs = localURLs.compactMap { $0 }
+                await player.play(urls: validURLs)
                 startTimer(duration: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription
                 state = .idle
             }
+        }
+    }
+
+    private func advanceToNextTrack() {
+        let nextIndex = currentTrackIndex + 1
+        guard nextIndex < playlistTracks.count else {
+            finishAndReset()
+            return
+        }
+        currentTrackIndex = nextIndex
+        let track = playlistTracks[nextIndex]
+        currentTrackTitle = "\(track.artist) — \(track.title)"
+    }
+
+    private func resolveSeedTrack(seedTrackId: Int?, client: PlexClient) async throws -> PlexTrack {
+        if let seedTrackId {
+            guard let track = try await client.getTrack(id: seedTrackId) else {
+                throw PlexodoroError.noCurrentTrack
+            }
+            return track
+        }
+        guard let session = try await client.getSessions() else {
+            throw PlexodoroError.noCurrentTrack
+        }
+        return session.track
+    }
+
+    private func preparePackedTracks(seedTrack: PlexTrack, client: PlexClient) async throws -> (packed: [PlexTrack], urls: [URL], totalSeconds: TimeInterval) {
+        let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
+        let withoutSeed = nearest.filter { $0.id != seedTrack.id }
+        let engine = PomodoroEngine()
+        var packed = engine.pack(tracks: withoutSeed)
+        packed = deduplicate(tracks: packed)
+        packed.append(seedTrack)
+        packed.shuffle()
+        let totalSeconds = engine.totalDuration(of: packed)
+
+        let urls: [URL] = packed.compactMap { track in
+            guard !track.key.isEmpty else { return nil }
+            return client.streamURL(for: track)
+        }
+
+        guard urls.count == packed.count else {
+            throw PlexodoroError.noAudioURL
+        }
+
+        return (packed, urls, totalSeconds)
+    }
+
+    private func finishAndReset() {
+        Task { @MainActor in
+            timerSubscription?.cancel()
+            state = .finished
+            player.stop()
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            resetState()
         }
     }
 
@@ -163,6 +210,8 @@ class AppState: ObservableObject {
         state = .idle
         timeRemaining = 25 * 60
         currentTrackTitle = ""
+        playlistTracks = []
+        currentTrackIndex = 0
         errorMessage = nil
     }
 

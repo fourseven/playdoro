@@ -1,5 +1,15 @@
 import Foundation
 
+enum UserDefaultsKey {
+    static let serverURL = "serverURL"
+    static let plexToken = "plexToken"
+}
+
+func deduplicate(tracks: [PlexTrack]) -> [PlexTrack] {
+    var seen = Set<String>()
+    return tracks.filter { seen.insert("\($0.id)-\($0.title)-\($0.artist)").inserted }
+}
+
 struct PlexTrack: Identifiable, Equatable {
     let id: Int
     let title: String

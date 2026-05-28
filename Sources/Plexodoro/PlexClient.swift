@@ -3,28 +3,13 @@ import OSLog
 
 private let log = Logger(subsystem: "com.mathewhartley.plexodoro", category: "PlexClient")
 
-private final class TrustDelegate: NSObject, URLSessionDelegate {
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: trust))
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
-}
-
 actor PlexClient {
     let serverURL: String
     let token: String
 
     private let decoder = JSONDecoder()
     private let session: URLSession
-    private let delegate = TrustDelegate()
+    private let delegate = CertDelegate()
 
     init(serverURL: String, token: String) {
         self.serverURL = serverURL
@@ -105,34 +90,8 @@ actor PlexClient {
                 URLQueryItem(name: "limit", value: String(limit))
             ]
         )
-        do {
-            log.error("Data size: \(data.count) bytes")
-
-            let json = try JSONSerialization.jsonObject(with: data)
-            log.error("JSONSerialization succeeded")
-            if let dict = json as? [String: Any] {
-                log.error("Top keys: \(dict.keys.sorted())")
-                if let mc = dict["MediaContainer"] as? [String: Any] {
-                    if let meta = mc["Metadata"] as? [[String: Any]] {
-                        log.error("Found \(meta.count) tracks")
-                    } else {
-                        log.error("Metadata is not [[String:Any]]")
-                    }
-                } else {
-                    log.error("No MediaContainer key")
-                }
-            } else {
-                log.error("Top-level is not a dictionary")
-            }
-
-            let container = try decodeContainer(from: data)
-            let tracks = (container.metadata ?? []).map { $0.toTrack }
-            log.error("Found \(tracks.count) tracks via Codable")
-            return tracks
-        } catch {
-            log.error("Error: \(error.localizedDescription, privacy: .public)")
-            throw error
-        }
+        let container = try decodeContainer(from: data)
+        return (container.metadata ?? []).map { $0.toTrack }
     }
 
     func getSessions() async throws -> PlexSession? {

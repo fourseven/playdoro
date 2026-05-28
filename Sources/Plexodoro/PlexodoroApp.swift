@@ -71,60 +71,14 @@ struct ContentView: View {
 
     private var idleView: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search for a seed track…", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .onChange(of: searchText) { newValue in
-                        searchDebounce(query: newValue)
-                    }
-            }
-            .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(6)
-
-            if isSearching {
-                ProgressView()
-                    .scaleEffect(0.8)
-                    .frame(maxWidth: .infinity)
-            } else if !searchResults.isEmpty {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(searchResults) { track in
-                            Button {
-                                appState.startPomodoro(seedTrackId: track.id)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(track.title)
-                                        .font(.body)
-                                        .lineLimit(1)
-                                    Text("\(track.artist) — \(track.album)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 6)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(4)
-                        }
-                    }
-                }
-                .frame(maxHeight: 200)
-            } else if let error = searchError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            } else if !searchText.isEmpty && !isSearching {
-                Text("No tracks found")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            SearchBar(
+                searchText: $searchText,
+                isSearching: isSearching,
+                searchResults: searchResults,
+                searchError: searchError,
+                onSearch: searchDebounce,
+                onSelect: { appState.startPomodoro(seedTrackId: $0.id) }
+            )
 
             Divider()
 
@@ -146,145 +100,12 @@ struct ContentView: View {
         }
     }
 
-    private var currentThumbURL: URL? {
-        let i = appState.player.currentTrackIndex
-        guard i < appState.player.tracks.count,
-              let thumb = appState.player.tracks[i].thumb else { return nil }
-        return URL(string: "\(appState.serverURL)\(thumb)?X-Plex-Token=\(appState.token)")
-    }
-
     private var activeView: some View {
-        VStack(spacing: 6) {
-            // Album art behind timer
-            ZStack {
-                AlbumArt(url: currentThumbURL)
-                    .frame(width: 140, height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                Text(appState.formattedTime)
-                    .font(.system(size: 36, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 4)
-                    .contentTransition(.numericText())
-            }
-            .padding(.vertical, 4)
-
-            if !appState.currentTrackTitle.isEmpty {
-                Text(appState.currentTrackTitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-
-            if appState.player.isDownloading {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text("Downloading tracks…")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            if !appState.player.tracks.isEmpty {
-                Divider()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 1) {
-                        ForEach(Array(appState.player.tracks.enumerated()), id: \.element.id) { i, track in
-                            HStack(spacing: 4) {
-                                if appState.player.isDownloading {
-                                    Image(systemName: "arrow.down.circle")
-                                        .font(.system(size: 7))
-                                        .foregroundColor(.secondary)
-                                } else if i == appState.player.currentTrackIndex {
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 7))
-                                        .foregroundColor(.green)
-                                } else {
-                                    Text("\(i + 1).")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 12, alignment: .trailing)
-                                }
-                                Text(track.title)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                Text(track.artist)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(i == appState.player.currentTrackIndex ? Color.green.opacity(0.1) : Color.clear)
-                            .cornerRadius(2)
-                        }
-                    }
-                }
-                .frame(maxHeight: 100)
-            }
-
-            HStack(spacing: 12) {
-                if !appState.player.isDownloading {
-                    Button {
-                        appState.togglePlayback()
-                    } label: {
-                        Image(systemName: appState.player.isPlaying ? "pause.fill" : "play.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-
-                    Button("Stop") {
-                        appState.stopPomodoro()
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                    .controlSize(.small)
-                }
-            }
-
-            if appState.state == .finished {
-                Text("Pomodoro complete!")
-                    .font(.caption)
-                    .foregroundColor(.green)
-            }
-        }
+        ActiveSessionView(appState: appState, serverURL: appState.serverURL, token: appState.token)
     }
 
     private var settingsContent: some View {
-        VStack(spacing: 12) {
-            TextField("Plex Server URL", text: $appState.serverURL)
-                .textFieldStyle(.roundedBorder)
-
-            SecureField("Plex Token", text: $appState.token)
-                .textFieldStyle(.roundedBorder)
-
-            HStack {
-                if appState.isConfigured {
-                    Label("Connected", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                } else if !appState.token.isEmpty {
-                    Label("Not connected", systemImage: "exclamationmark.circle.fill")
-                        .foregroundColor(.orange)
-                }
-
-                Spacer()
-
-                Button("Test Connection") {
-                    appState.updateCredentials(
-                        serverURL: appState.serverURL,
-                        token: appState.token
-                    )
-                }
-            }
-
-            if let error = appState.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-        }
-        .padding(.vertical, 4)
+        SettingsView(appState: appState)
     }
 
     private func searchDebounce(query: String) {
@@ -322,5 +143,236 @@ struct ContentView: View {
             searchError = error.localizedDescription
             isSearching = false
         }
+    }
+}
+
+private struct SearchBar: View {
+    @Binding var searchText: String
+    let isSearching: Bool
+    let searchResults: [PlexTrack]
+    let searchError: String?
+    let onSearch: (String) -> Void
+    let onSelect: (PlexTrack) -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search for a seed track…", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .onChange(of: searchText) { newValue in
+                        onSearch(newValue)
+                    }
+            }
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(6)
+
+            if isSearching {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(maxWidth: .infinity)
+            } else if !searchResults.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(searchResults) { track in
+                            Button {
+                                onSelect(track)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(track.title)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                    Text("\(track.artist) — \(track.album)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+                .frame(maxHeight: 200)
+            } else if let error = searchError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else if !searchText.isEmpty && !isSearching {
+                Text("No tracks found")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
+private struct ActiveSessionView: View {
+    @ObservedObject var appState: AppState
+    let serverURL: String
+    let token: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                AlbumArt(url: currentThumbURL)
+                    .frame(width: 140, height: 140)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                Text(appState.formattedTime)
+                    .font(.system(size: 36, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 4)
+                    .contentTransition(.numericText())
+            }
+            .padding(.vertical, 4)
+
+            if !appState.currentTrackTitle.isEmpty {
+                Text(appState.currentTrackTitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            if appState.isDownloading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Downloading tracks…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if !appState.playlistTracks.isEmpty {
+                Divider()
+                PlaylistView(
+                    tracks: appState.playlistTracks,
+                    currentTrackIndex: appState.currentTrackIndex,
+                    isDownloading: appState.isDownloading
+                )
+            }
+
+            HStack(spacing: 12) {
+                if !appState.isDownloading {
+                    Button {
+                        appState.togglePlayback()
+                    } label: {
+                        Image(systemName: appState.player.isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button("Stop") {
+                        appState.stopPomodoro()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .controlSize(.small)
+                }
+            }
+
+            if appState.state == .finished {
+                Text("Pomodoro complete!")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+        }
+    }
+
+    private var currentThumbURL: URL? {
+        let i = appState.currentTrackIndex
+        guard i < appState.playlistTracks.count,
+              let thumb = appState.playlistTracks[i].thumb else { return nil }
+        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
+    }
+}
+
+private struct PlaylistView: View {
+    let tracks: [PlexTrack]
+    let currentTrackIndex: Int
+    let isDownloading: Bool
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { i, track in
+                    HStack(spacing: 4) {
+                        if isDownloading {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 7))
+                                .foregroundColor(.secondary)
+                        } else if i == currentTrackIndex {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 7))
+                                .foregroundColor(.green)
+                        } else {
+                            Text("\(i + 1).")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .frame(width: 12, alignment: .trailing)
+                        }
+                        Text(track.title)
+                            .font(.caption2)
+                            .lineLimit(1)
+                        Text(track.artist)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(i == currentTrackIndex ? Color.green.opacity(0.1) : Color.clear)
+                    .cornerRadius(2)
+                }
+            }
+        }
+    }
+}
+
+private struct SettingsView: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        VStack(spacing: 12) {
+            TextField("Plex Server URL", text: $appState.serverURL)
+                .textFieldStyle(.roundedBorder)
+
+            SecureField("Plex Token", text: $appState.token)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                if appState.isConfigured {
+                    Label("Connected", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else if !appState.token.isEmpty {
+                    Label("Not connected", systemImage: "exclamationmark.circle.fill")
+                        .foregroundColor(.orange)
+                }
+
+                Spacer()
+
+                Button("Test Connection") {
+                    appState.updateCredentials(
+                        serverURL: appState.serverURL,
+                        token: appState.token
+                    )
+                }
+            }
+
+            if let error = appState.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }

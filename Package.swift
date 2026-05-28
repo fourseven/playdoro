@@ -11,5 +11,9 @@ let package = Package(
             name: "Plexodoro",
             exclude: ["Info.plist"]
         ),
+        .testTarget(
+            name: "PlexodoroTests",
+            dependencies: ["Plexodoro"]
+        ),
     ]
 )

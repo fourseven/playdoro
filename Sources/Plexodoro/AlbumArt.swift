@@ -3,24 +3,8 @@ import SwiftUI
 private let session: URLSession = {
     let config = URLSessionConfiguration.default
     config.timeoutIntervalForRequest = 10
-    let delegate = CertDelegate()
-    return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+    return URLSession(configuration: config, delegate: CertDelegate(), delegateQueue: nil)
 }()
-
-private final class CertDelegate: NSObject, URLSessionDelegate {
-    func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: trust))
-        } else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
-}
 
 struct AlbumArt: View {
     let url: URL?

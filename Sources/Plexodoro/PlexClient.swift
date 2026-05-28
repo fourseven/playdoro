@@ -33,8 +33,8 @@ actor PlexClient {
         return data
     }
 
-    func ping() async -> Bool {
-        (try? await fetchJSON(path: "/")) != nil
+    func ping() async throws {
+        _ = try await fetchJSON(path: "/")
     }
 
     func getSessions() async throws -> PlexSession? {

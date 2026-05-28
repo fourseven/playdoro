@@ -37,9 +37,14 @@ class AppState: ObservableObject {
         self.client = PlexClient(serverURL: serverURL, token: token)
 
         Task {
-            let ok = await client?.ping() ?? false
-            isConfigured = ok
-            errorMessage = ok ? nil : "Could not connect to Plex server"
+            do {
+                try await client?.ping()
+                isConfigured = true
+                errorMessage = nil
+            } catch {
+                isConfigured = false
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

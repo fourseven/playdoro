@@ -81,7 +81,8 @@ class AppState: ObservableObject {
                 let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
                 let engine = PomodoroEngine()
                 var packed = engine.pack(tracks: nearest)
-                // Ensure seed is always in the playlist (nearest usually excludes it)
+                var seen = Set<String>()
+                packed.removeAll { !seen.insert("\($0.id)-\($0.title)-\($0.artist)").inserted }
                 if !packed.contains(where: { $0.id == seedTrack.id }) {
                     packed.append(seedTrack)
                 }

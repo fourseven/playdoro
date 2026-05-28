@@ -8,7 +8,8 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "Plexodoro"
+            name: "Plexodoro",
+            exclude: ["Info.plist"]
         ),
     ]
 )

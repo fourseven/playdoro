@@ -46,7 +46,7 @@ actor PlexClient {
 
     private func fetchJSON(path: String, query: [URLQueryItem] = [], method: String = "GET") async throws -> Data {
         let requestURL = url(path: path, query: query)
-        log.debug("Request: \(method) \(requestURL.absoluteString)")
+        log.debug("Request: \(method) \(requestURL.absoluteString, privacy: .public)")
 
         var req = URLRequest(url: requestURL)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -58,14 +58,14 @@ actor PlexClient {
         return try await withCheckedThrowingContinuation { continuation in
             session.dataTask(with: req) { data, response, error in
                 if let error = error {
-                    log.error("Network error: \(error.localizedDescription)")
+                    log.error("Network error: \(error.localizedDescription, privacy: .public)")
                     continuation.resume(throwing: error)
                 } else if let data = data,
                           let httpResponse = response as? HTTPURLResponse {
                     let contentType = httpResponse.allHeaderFields["Content-Type"] as? String ?? "none"
                     let bodyPreview = String(data: data.prefix(300), encoding: .utf8) ?? "not utf-8"
-                    log.debug("Response: \(httpResponse.statusCode) \(contentType)")
-                    log.debug("Body preview: \(bodyPreview)")
+                    log.debug("Response: \(httpResponse.statusCode) \(contentType, privacy: .public)")
+                    log.debug("Body preview: \(bodyPreview, privacy: .public)")
 
                     if httpResponse.statusCode == 200 {
                         continuation.resume(returning: data)
@@ -90,7 +90,7 @@ actor PlexClient {
     }
 
     func searchTracks(query: String, limit: Int = 20) async throws -> [PlexTrack] {
-        log.debug("Searching: '\(query)'")
+        log.debug("Searching: '\(query, privacy: .public)'")
         let data = try await fetchJSON(
             path: "/search",
             query: [
@@ -100,15 +100,31 @@ actor PlexClient {
             ]
         )
         do {
+            log.error("Data size: \(data.count) bytes")
+
+            let json = try JSONSerialization.jsonObject(with: data)
+            log.error("JSONSerialization succeeded")
+            if let dict = json as? [String: Any] {
+                log.error("Top keys: \(dict.keys.sorted())")
+                if let mc = dict["MediaContainer"] as? [String: Any] {
+                    if let meta = mc["Metadata"] as? [[String: Any]] {
+                        log.error("Found \(meta.count) tracks")
+                    } else {
+                        log.error("Metadata is not [[String:Any]]")
+                    }
+                } else {
+                    log.error("No MediaContainer key")
+                }
+            } else {
+                log.error("Top-level is not a dictionary")
+            }
+
             let container = try decodeContainer(from: data)
             let tracks = (container.metadata ?? []).map { $0.toTrack }
-            log.debug("Found \(tracks.count) tracks")
+            log.error("Found \(tracks.count) tracks via Codable")
             return tracks
         } catch {
-            log.error("Decode error: \(error.localizedDescription)")
-            if let raw = String(data: data, encoding: .utf8) {
-                log.error("Raw response (first 500): \(raw.prefix(500))")
-            }
+            log.error("Error: \(error.localizedDescription, privacy: .public)")
             throw error
         }
     }
@@ -135,6 +151,7 @@ actor PlexClient {
     nonisolated func streamURL(for track: PlexTrack) -> URL? {
         guard !track.key.isEmpty else { return nil }
         var components = URLComponents(string: serverURL + track.key)!
+        components.scheme = "http"
         components.queryItems = [URLQueryItem(name: "X-Plex-Token", value: token)]
         return components.url
     }

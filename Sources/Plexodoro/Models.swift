@@ -78,7 +78,7 @@ struct PlexTrackJSON: Decodable {
     let distance: Double?
     let type: String?
     let player: PlexPlayerJSON?
-    let librarySectionID: String?
+    let librarySectionID: Int?
     let media: [PlexMediaJSON]?
 
     enum CodingKeys: String, CodingKey {

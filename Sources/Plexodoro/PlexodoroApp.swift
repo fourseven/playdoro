@@ -159,6 +159,39 @@ struct ContentView: View {
                     .lineLimit(2)
             }
 
+            if !appState.player.tracks.isEmpty {
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(appState.player.tracks.enumerated()), id: \.element.id) { i, track in
+                            HStack(spacing: 4) {
+                                if i == appState.player.currentTrackIndex {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(.green)
+                                } else {
+                                    Text("\(i + 1).")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(track.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                Text(track.artist)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(i == appState.player.currentTrackIndex ? Color.green.opacity(0.1) : Color.clear)
+                            .cornerRadius(3)
+                        }
+                    }
+                }
+                .frame(maxHeight: 150)
+            }
+
             Button("Stop") {
                 appState.stopPomodoro()
             }

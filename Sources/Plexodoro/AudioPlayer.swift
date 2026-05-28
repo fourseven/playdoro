@@ -1,5 +1,8 @@
 import AVFoundation
 import Foundation
+import OSLog
+
+private let log = Logger(subsystem: "com.mathewhartley.plexodoro", category: "AudioPlayer")
 
 @MainActor
 class AudioPlayer: ObservableObject {
@@ -28,6 +31,9 @@ class AudioPlayer: ObservableObject {
         currentTrackIndex = 0
         hasHandledPlaylistEnd = false
 
+        log.log("Playing \(tracks.count) tracks")
+        log.log("First URL: \(urls.first?.absoluteString ?? "none", privacy: .public)")
+
         let items = urls.map(AVPlayerItem.init)
         let queuePlayer = AVQueuePlayer(items: items)
         self.player = queuePlayer
@@ -43,10 +49,12 @@ class AudioPlayer: ObservableObject {
 
                 if !player.items().isEmpty {
                     self.currentTrackIndex = self.tracks.count - player.items().count
+                    log.log("Track ended, now at index \(self.currentTrackIndex)")
                 } else if !self.tracks.isEmpty {
                     self.hasHandledPlaylistEnd = true
                     self.currentTrackIndex = self.tracks.count - 1
                     self.isPlaying = false
+                    log.log("Playlist finished")
                     self.onPlaylistFinished?()
                 }
             }
@@ -54,6 +62,7 @@ class AudioPlayer: ObservableObject {
 
         queuePlayer.play()
         isPlaying = true
+        log.log("AVQueuePlayer.play() called")
     }
 
     func stopAfterCurrentTrack() {
@@ -79,6 +88,7 @@ class AudioPlayer: ObservableObject {
     }
 
     func stop() {
+        log.log("Stopping playback")
         removeObservers()
         player?.pause()
         player?.removeAllItems()

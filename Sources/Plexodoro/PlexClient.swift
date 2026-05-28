@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let log = Logger(subsystem: "com.mathewhartley.plexodoro", category: "PlexClient")
 
 private final class TrustDelegate: NSObject, URLSessionDelegate {
     func urlSession(
@@ -42,7 +45,10 @@ actor PlexClient {
     }
 
     private func fetchJSON(path: String, query: [URLQueryItem] = [], method: String = "GET") async throws -> Data {
-        var req = URLRequest(url: url(path: path, query: query))
+        let requestURL = url(path: path, query: query)
+        log.debug("Request: \(method) \(requestURL.absoluteString)")
+
+        var req = URLRequest(url: requestURL)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Client-Identifier")
         req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Product")
@@ -52,12 +58,23 @@ actor PlexClient {
         return try await withCheckedThrowingContinuation { continuation in
             session.dataTask(with: req) { data, response, error in
                 if let error = error {
+                    log.error("Network error: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                 } else if let data = data,
-                          let httpResponse = response as? HTTPURLResponse,
-                          httpResponse.statusCode == 200 {
-                    continuation.resume(returning: data)
+                          let httpResponse = response as? HTTPURLResponse {
+                    let contentType = httpResponse.allHeaderFields["Content-Type"] as? String ?? "none"
+                    let bodyPreview = String(data: data.prefix(300), encoding: .utf8) ?? "not utf-8"
+                    log.debug("Response: \(httpResponse.statusCode) \(contentType)")
+                    log.debug("Body preview: \(bodyPreview)")
+
+                    if httpResponse.statusCode == 200 {
+                        continuation.resume(returning: data)
+                    } else {
+                        log.error("Non-200 status: \(httpResponse.statusCode)")
+                        continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                    }
                 } else {
+                    log.error("No data or response")
                     continuation.resume(throwing: PlexodoroError.serverUnreachable)
                 }
             }.resume()
@@ -73,6 +90,7 @@ actor PlexClient {
     }
 
     func searchTracks(query: String, limit: Int = 20) async throws -> [PlexTrack] {
+        log.debug("Searching: '\(query)'")
         let data = try await fetchJSON(
             path: "/search",
             query: [
@@ -81,8 +99,18 @@ actor PlexClient {
                 URLQueryItem(name: "limit", value: String(limit))
             ]
         )
-        let container = try decodeContainer(from: data)
-        return (container.metadata ?? []).map { $0.toTrack }
+        do {
+            let container = try decodeContainer(from: data)
+            let tracks = (container.metadata ?? []).map { $0.toTrack }
+            log.debug("Found \(tracks.count) tracks")
+            return tracks
+        } catch {
+            log.error("Decode error: \(error.localizedDescription)")
+            if let raw = String(data: data, encoding: .utf8) {
+                log.error("Raw response (first 500): \(raw.prefix(500))")
+            }
+            throw error
+        }
     }
 
     func getSessions() async throws -> PlexSession? {

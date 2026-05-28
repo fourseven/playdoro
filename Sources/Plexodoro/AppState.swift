@@ -16,7 +16,7 @@ class AppState: ObservableObject {
     @Published var isConfigured: Bool = false
 
     let player = AudioPlayer()
-    private var client: PlexClient?
+    var client: PlexClient?
     private var timerSubscription: AnyCancellable?
 
     init() {
@@ -49,6 +49,10 @@ class AppState: ObservableObject {
     }
 
     func startPomodoro() {
+        startPomodoro(seedTrackId: nil)
+    }
+
+    func startPomodoro(seedTrackId: Int?) {
         guard let client = client else {
             errorMessage = "Configure your Plex server first"
             return
@@ -59,13 +63,19 @@ class AppState: ObservableObject {
 
         Task {
             do {
-                guard let session = try await client.getSessions() else {
-                    throw PlexodoroError.noCurrentTrack
+                let seedId: Int
+                if let seedTrackId {
+                    seedId = seedTrackId
+                    currentTrackTitle = ""
+                } else {
+                    guard let session = try await client.getSessions() else {
+                        throw PlexodoroError.noCurrentTrack
+                    }
+                    currentTrackTitle = "\(session.track.artist) — \(session.track.title)"
+                    seedId = session.track.id
                 }
 
-                currentTrackTitle = "\(session.track.artist) — \(session.track.title)"
-
-                let nearest = try await client.getNearest(trackId: session.track.id)
+                let nearest = try await client.getNearest(trackId: seedId)
                 let engine = PomodoroEngine()
                 let packed = engine.pack(tracks: nearest)
                 let totalSeconds = engine.totalDuration(of: packed)

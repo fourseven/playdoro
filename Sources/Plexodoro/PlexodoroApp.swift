@@ -15,6 +15,10 @@ struct PlexodoroApp: App {
 struct ContentView: View {
     @ObservedObject var appState: AppState
     @State private var showSettings = false
+    @State private var searchText = ""
+    @State private var searchResults: [PlexTrack] = []
+    @State private var isSearching = false
+    @State private var searchTaskID = UUID()
 
     var body: some View {
         VStack(spacing: 12) {
@@ -43,30 +47,87 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
             } else {
-                Button("Settings…") {
-                    showSettings = true
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-            }
+                HStack(spacing: 12) {
+                    Button("Settings…") {
+                        showSettings = true
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
 
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
+                    Spacer()
+
+                    Button("Quit") {
+                        NSApplication.shared.terminate(nil)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                }
             }
-            .buttonStyle(.plain)
-            .font(.caption)
         }
         .padding()
-        .frame(width: 240)
+        .frame(width: 280)
     }
 
     private var idleView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "play.circle")
-                .font(.largeTitle)
+        VStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search for a seed track…", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .onChange(of: searchText) { newValue in
+                        searchDebounce(query: newValue)
+                    }
+            }
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(6)
 
-            Button("Start pomodoro from current track") {
-                appState.startPomodoro()
+            if isSearching {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(maxWidth: .infinity)
+            } else if !searchResults.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(searchResults) { track in
+                            Button {
+                                appState.startPomodoro(seedTrackId: track.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(track.title)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                    Text("\(track.artist) — \(track.album)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+                .frame(maxHeight: 200)
+            } else if !searchText.isEmpty && !isSearching {
+                Text("No tracks found")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            Button {
+                appState.startPomodoro(seedTrackId: nil)
+            } label: {
+                Label("Start from current track", systemImage: "play.circle")
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -141,5 +202,39 @@ struct ContentView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func searchDebounce(query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            searchResults = []
+            isSearching = false
+            return
+        }
+
+        let taskID = UUID()
+        searchTaskID = taskID
+        isSearching = true
+
+        Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard taskID == searchTaskID else { return }
+            await performSearch(query: trimmed, taskID: taskID)
+        }
+    }
+
+    private func performSearch(query: String, taskID: UUID) async {
+        guard let client = appState.client else { return }
+
+        do {
+            let results = try await client.searchTracks(query: query)
+            guard taskID == searchTaskID else { return }
+            searchResults = results
+            isSearching = false
+        } catch {
+            guard taskID == searchTaskID else { return }
+            searchResults = []
+            isSearching = false
+        }
     }
 }

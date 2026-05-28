@@ -66,6 +66,19 @@ actor PlexClient {
         _ = try await fetchJSON(path: "/")
     }
 
+    func searchTracks(query: String, limit: Int = 20) async throws -> [PlexTrack] {
+        let data = try await fetchJSON(
+            path: "/search",
+            query: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "type", value: "10"),
+                URLQueryItem(name: "limit", value: String(limit))
+            ]
+        )
+        let container = try decoder.decode(PlexMediaContainer.self, from: data)
+        return (container.metadata ?? []).map { $0.toTrack }
+    }
+
     func getSessions() async throws -> PlexSession? {
         let data = try await fetchJSON(path: "/status/sessions")
         let container = try decoder.decode(PlexMediaContainer.self, from: data)

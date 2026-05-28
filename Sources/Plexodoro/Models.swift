@@ -26,7 +26,7 @@ enum PomodoroState: Equatable {
 struct PomodoroConfig {
     var targetDuration: TimeInterval = 25 * 60
     var tolerance: TimeInterval = 60
-    var maxCandidates: Int = 50
+    var maxCandidates: Int = 200
     static let `default` = PomodoroConfig()
 }
 

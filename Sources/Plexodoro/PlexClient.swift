@@ -74,13 +74,13 @@ actor PlexClient {
         try decoder.decode(PlexResponse.self, from: data).mediaContainer
     }
 
-    func getTrack(id: Int) async throws -> PlexTrack? {
+    func getTrack(id: String) async throws -> Track? {
         let data = try await fetchJSON(path: "/library/metadata/\(id)")
         let container = try decodeContainer(from: data)
         return container.metadata?.first?.toTrack
     }
 
-    func searchTracks(query: String, limit: Int = 20) async throws -> [PlexTrack] {
+    func searchTracks(query: String, limit: Int = 20) async throws -> [Track] {
         log.debug("Searching: '\(query, privacy: .public)'")
         let data = try await fetchJSON(
             path: "/search",
@@ -104,7 +104,7 @@ actor PlexClient {
         )
     }
 
-    func getNearest(trackId: Int, limit: Int = 50) async throws -> [PlexTrack] {
+    func getNearest(trackId: String, limit: Int = 50) async throws -> [Track] {
         let data = try await fetchJSON(
             path: "/library/metadata/\(trackId)/nearest",
             query: [URLQueryItem(name: "limit", value: String(limit))]
@@ -113,7 +113,7 @@ actor PlexClient {
         return (container.metadata ?? []).map { $0.toTrack }
     }
 
-    nonisolated func thumbURL(for track: PlexTrack) -> URL? {
+    nonisolated func thumbURL(for track: Track) -> URL? {
         guard let thumb = track.thumb else { return nil }
         let item = URLQueryItem(name: "X-Plex-Token", value: token)
         var components = URLComponents(string: serverURL + thumb)!
@@ -121,7 +121,7 @@ actor PlexClient {
         return components.url
     }
 
-    nonisolated func streamURL(for track: PlexTrack) -> URL? {
+    nonisolated func streamURL(for track: Track) -> URL? {
         guard !track.key.isEmpty else { return nil }
         let item = URLQueryItem(name: "X-Plex-Token", value: token)
         var components = URLComponents(string: serverURL + track.key)!

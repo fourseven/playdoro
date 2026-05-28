@@ -5,24 +5,24 @@ enum UserDefaultsKey {
     static let plexToken = "plexToken"
 }
 
-func deduplicate(tracks: [PlexTrack]) -> [PlexTrack] {
+func deduplicate(tracks: [Track]) -> [Track] {
     var seen = Set<String>()
     return tracks.filter { seen.insert("\($0.id)-\($0.title)-\($0.artist)").inserted }
 }
 
-struct PlexTrack: Identifiable, Equatable {
-    let id: Int
+struct Track: Identifiable, Equatable {
+    let id: String
     let title: String
     let artist: String
     let album: String
     let duration: TimeInterval
     let key: String
     let thumb: String?
-    let distance: Double?
+    let score: Double?
 }
 
 struct PlexSession {
-    let track: PlexTrack
+    let track: Track
     let state: String
 }
 
@@ -97,16 +97,16 @@ struct PlexTrackJSON: Decodable {
         case media = "Media"
     }
 
-    var toTrack: PlexTrack {
-        PlexTrack(
-            id: Int(ratingKey) ?? 0,
+    var toTrack: Track {
+        Track(
+            id: ratingKey,
             title: title ?? "Unknown",
             artist: grandparentTitle ?? "Unknown",
             album: parentTitle ?? "Unknown",
             duration: TimeInterval(duration ?? 0),
             key: media?.first?.part?.first?.key ?? "",
             thumb: thumb,
-            distance: distance
+            score: distance
         )
     }
 }

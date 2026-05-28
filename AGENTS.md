@@ -28,8 +28,7 @@ Music provider should become a protocol so Plex/Spotify are interchangeable:
 - Extract `MusicProvider` protocol (search, getTrack, getNearest, getStreamURL)
 - `PlexClient` conforms; `SpotifyClient` is new conformance
 - `AppState` references `MusicProvider` instead of `PlexClient`
-- `PlexTrack` → generic `Track` (id, title, artist, album, duration) — `PomodoroEngine` already just needs these fields
-- `AudioPlayer` is already provider-agnostic
+- `Track` is already generic (id, title, artist, album, duration, score) — `PomodoroEngine` and `AudioPlayer` are already provider-agnostic
 
 ## Key Files
 
@@ -40,7 +39,7 @@ Music provider should become a protocol so Plex/Spotify are interchangeable:
 | `PlexClient.swift` | Actor-based Plex API client (search, nearest, sessions, stream URLs) |
 | `AudioPlayer.swift` | AVQueuePlayer wrapper, sequential download + cleanup |
 | `PomodoroEngine.swift` | Track-packing algorithm |
-| `Models.swift` | PlexTrack, JSON decoding types (CodingKeys), errors |
+| `Models.swift` | Track, JSON decoding types (CodingKeys), errors |
 | `AlbumArt.swift` | Async album art via URLSession + CertDelegate |
 | `CertDelegate.swift` | Trusts all server certs (self-signed Plex on LAN) |
 | `Tests/PlexodoroTests/PomodoroEngineTests.swift` | 3 test classes, 16 cases (PomodoroEngineTests, DeduplicateTests, ErrorDescriptionTests) |

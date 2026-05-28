@@ -16,7 +16,7 @@ struct ContentView: View {
     @ObservedObject var appState: AppState
     @State private var showSettings = false
     @State private var searchText = ""
-    @State private var searchResults: [PlexTrack] = []
+    @State private var searchResults: [Track] = []
     @State private var searchError: String?
     @State private var isSearching = false
     @State private var searchTaskID = UUID()
@@ -149,10 +149,10 @@ struct ContentView: View {
 private struct SearchBar: View {
     @Binding var searchText: String
     let isSearching: Bool
-    let searchResults: [PlexTrack]
+    let searchResults: [Track]
     let searchError: String?
     let onSearch: (String) -> Void
-    let onSelect: (PlexTrack) -> Void
+    let onSelect: (Track) -> Void
 
     var body: some View {
         VStack(spacing: 10) {
@@ -296,7 +296,7 @@ private struct ActiveSessionView: View {
 }
 
 private struct PlaylistView: View {
-    let tracks: [PlexTrack]
+    let tracks: [Track]
     let currentTrackIndex: Int
     let isDownloading: Bool
 

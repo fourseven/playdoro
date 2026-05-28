@@ -63,7 +63,7 @@ class AudioPlayer: ObservableObject {
 
     // MARK: - Downloads
 
-    private func downloadTrack(_ i: Int, url: URL, track: PlexTrack) async -> URL? {
+    private func downloadTrack(_ i: Int, url: URL, track: Track) async -> URL? {
         fileLog("Downloading track \(i): \(track.title)")
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             fileErr("Failed to create URLComponents for track \(i)")
@@ -111,7 +111,7 @@ class AudioPlayer: ObservableObject {
         }
     }
 
-    func download(tracks: [PlexTrack], urls: [URL]) async -> [URL?] {
+    func download(tracks: [Track], urls: [URL]) async -> [URL?] {
         try? FileManager.default.removeItem(at: fileLogURL)
         fileLog("Downloading \(tracks.count) tracks sequentially...")
         var results: [URL?] = []

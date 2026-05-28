@@ -7,16 +7,16 @@ struct PomodoroEngine {
         self.config = config
     }
 
-    func pack(tracks: [PlexTrack], target: TimeInterval? = nil) -> [PlexTrack] {
+    func pack(tracks: [Track], target: TimeInterval? = nil) -> [Track] {
         let target = target ?? config.targetDuration
         let minDuration = target - config.tolerance
         let maxDuration = target + config.tolerance
 
         let sorted = tracks.sorted { a, b in
-            (a.distance ?? Double.infinity) < (b.distance ?? Double.infinity)
+            (a.score ?? Double.infinity) < (b.score ?? Double.infinity)
         }
 
-        var selected: [PlexTrack] = []
+        var selected: [Track] = []
         var total: TimeInterval = 0
         var i = 0
 
@@ -53,7 +53,7 @@ struct PomodoroEngine {
         return selected
     }
 
-    func totalDuration(of tracks: [PlexTrack]) -> TimeInterval {
+    func totalDuration(of tracks: [Track]) -> TimeInterval {
         tracks.reduce(0) { $0 + $1.duration / 1000 }
     }
 }

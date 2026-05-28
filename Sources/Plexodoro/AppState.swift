@@ -14,7 +14,7 @@ class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(token, forKey: UserDefaultsKey.plexToken) }
     }
     @Published var isConfigured: Bool = false
-    @Published var playlistTracks: [PlexTrack] = []
+    @Published var playlistTracks: [Track] = []
     @Published var currentTrackIndex: Int = 0
     @Published var isDownloading: Bool = false
 
@@ -56,7 +56,7 @@ class AppState: ObservableObject {
         startPomodoro(seedTrackId: nil)
     }
 
-    func startPomodoro(seedTrackId: Int?) {
+    func startPomodoro(seedTrackId: String?) {
         guard state == .idle else { return }
         guard let client = client else {
             errorMessage = "Configure your Plex server first"
@@ -128,7 +128,7 @@ class AppState: ObservableObject {
         currentTrackTitle = "\(track.artist) — \(track.title)"
     }
 
-    private func resolveSeedTrack(seedTrackId: Int?, client: PlexClient) async throws -> PlexTrack {
+    private func resolveSeedTrack(seedTrackId: String?, client: PlexClient) async throws -> Track {
         if let seedTrackId {
             guard let track = try await client.getTrack(id: seedTrackId) else {
                 throw PlexodoroError.noCurrentTrack
@@ -141,7 +141,7 @@ class AppState: ObservableObject {
         return session.track
     }
 
-    private func preparePackedTracks(seedTrack: PlexTrack, client: PlexClient) async throws -> (packed: [PlexTrack], urls: [URL], totalSeconds: TimeInterval) {
+    private func preparePackedTracks(seedTrack: Track, client: PlexClient) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
         let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
         let withoutSeed = nearest.filter { $0.id != seedTrack.id }
         let engine = PomodoroEngine()

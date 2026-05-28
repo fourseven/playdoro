@@ -5,16 +5,16 @@ import Foundation
 final class PomodoroEngineTests: XCTestCase {
     // MARK: - Helpers
 
-    func makeTrack(id: Int, duration: TimeInterval, distance: Double = 1.0) -> PlexTrack {
-        PlexTrack(
-            id: id,
+    func makeTrack(id: Int, duration: TimeInterval, distance: Double = 1.0) -> Track {
+        Track(
+            id: String(id),
             title: "Track \(id)",
             artist: "Artist",
             album: "Album",
             duration: duration * 1000,
             key: "",
             thumb: nil,
-            distance: distance
+            score: distance
         )
     }
 
@@ -57,7 +57,7 @@ final class PomodoroEngineTests: XCTestCase {
         let result = engine.pack(tracks: tracks, target: 560)
 
         // Track 2 (700s) exceeds maxDuration (620) so only track 1 fits
-        XCTAssertFalse(result.contains(where: { $0.id == 2 }))
+        XCTAssertFalse(result.contains(where: { $0.id == "2" }))
         XCTAssertEqual(result.count, 1)
     }
 
@@ -89,7 +89,7 @@ final class PomodoroEngineTests: XCTestCase {
         let result = engine.pack(tracks: [track], target: 500)
 
         XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result.first?.id, 1)
+        XCTAssertEqual(result.first?.id, "1")
     }
 
     func testEmptyTracksReturnsEmpty() {
@@ -203,7 +203,7 @@ final class PomodoroEngineTests: XCTestCase {
         let result = engine.pack(tracks: tracks, target: 300)
 
         for track in result {
-            XCTAssertGreaterThan(track.id, 0)
+            XCTAssertFalse(track.id.isEmpty)
             XCTAssertFalse(track.title.isEmpty)
             XCTAssertGreaterThan(track.duration, 0)
         }
@@ -211,16 +211,16 @@ final class PomodoroEngineTests: XCTestCase {
 }
 
 final class DeduplicateTests: XCTestCase {
-    func makeTrack(id: Int, title: String, artist: String = "Artist") -> PlexTrack {
-        PlexTrack(
-            id: id,
+    func makeTrack(id: Int, title: String, artist: String = "Artist") -> Track {
+        Track(
+            id: String(id),
             title: title,
             artist: artist,
             album: "Album",
             duration: 180_000,
             key: "",
             thumb: nil,
-            distance: nil
+            score: nil
         )
     }
 
@@ -233,8 +233,8 @@ final class DeduplicateTests: XCTestCase {
 
         let result = deduplicate(tracks: tracks)
         XCTAssertEqual(result.count, 2)
-        XCTAssertEqual(result[0].id, 1)
-        XCTAssertEqual(result[1].id, 2)
+        XCTAssertEqual(result[0].id, "1")
+        XCTAssertEqual(result[1].id, "2")
     }
 
     func testDeduplicatePreservesUniqueTracks() {

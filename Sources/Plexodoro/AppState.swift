@@ -107,6 +107,7 @@ class AppState: ObservableObject {
                 }
 
                 timeRemaining = totalSeconds
+                player.isDownloading = true
                 await player.play(tracks: packed, urls: urls)
                 startTimer(duration: totalSeconds)
             } catch {

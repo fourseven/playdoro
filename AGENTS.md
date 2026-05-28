@@ -17,15 +17,16 @@ macOS menu-bar app — Pomodoro timer synced with Plex music playback (Spotify s
 ## Architecture
 
 - **Entrypoint:** `Sources/Plexodoro/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)`
-- **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `PlexClient` + `AudioPlayer` directly
-- **Networking:** `PlexClient` (`actor`) — Plex HTTP API with self-signed cert support via `CertDelegate`
+- **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicProvider` + `AudioPlayer` directly
+- **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (Plex/Spotify interchangeable)
+- **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicProvider`) — Plex HTTP API with self-signed cert support via `CertDelegate`
 - **Audio:** `AudioPlayer` (`@MainActor`) — wraps `AVQueuePlayer`, downloads all tracks to temp files before playback
 - **Engine:** `PomodoroEngine` (value-type struct) — two-phase pack algorithm (lookahead random → greedy fill)
 
 ### Modularisation Direction
 
-Music provider should become a protocol so Plex/Spotify are interchangeable:
-- Extract `MusicProvider` protocol (search, getTrack, getNearest, getStreamURL)
+Music provider is now a protocol so Plex/Spotify are interchangeable:
+- `MusicProvider` protocol (search, getTrack, getNearest, getStreamURL)
 - `PlexClient` conforms; `SpotifyClient` is new conformance
 - `AppState` references `MusicProvider` instead of `PlexClient`
 - `Track` is already generic (id, title, artist, album, duration, score) — `PomodoroEngine` and `AudioPlayer` are already provider-agnostic
@@ -36,7 +37,8 @@ Music provider should become a protocol so Plex/Spotify are interchangeable:
 |------|------|
 | `PlexodoroApp.swift` | Entrypoint, all SwiftUI views (ContentView, ActiveSessionView, SettingsView) |
 | `AppState.swift` | ViewModel — timer, playlist, orchestrates PlexClient + AudioPlayer |
-| `PlexClient.swift` | Actor-based Plex API client (search, nearest, sessions, stream URLs) |
+| `PlexClient.swift` | Actor-based Plex API client (search, nearest, sessions, stream URLs) conforming `MusicProvider` |
+| `MusicProvider.swift` | `MusicProvider` protocol — abstracts search, playback URLs, session |
 | `AudioPlayer.swift` | AVQueuePlayer wrapper, sequential download + cleanup |
 | `PomodoroEngine.swift` | Track-packing algorithm |
 | `Models.swift` | Track, JSON decoding types (CodingKeys), errors |

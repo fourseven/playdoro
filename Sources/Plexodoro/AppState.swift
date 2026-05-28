@@ -19,7 +19,7 @@ class AppState: ObservableObject {
     @Published var isDownloading: Bool = false
 
     let player = AudioPlayer()
-    var client: PlexClient?
+    var client: (any MusicProvider)?
     private var timerSubscription: AnyCancellable?
     private var isTimerPaused = false
 
@@ -59,7 +59,7 @@ class AppState: ObservableObject {
     func startPomodoro(seedTrackId: String?) {
         guard state == .idle else { return }
         guard let client = client else {
-            errorMessage = "Configure your Plex server first"
+            errorMessage = "Configure a music provider first"
             return
         }
 
@@ -128,20 +128,20 @@ class AppState: ObservableObject {
         currentTrackTitle = "\(track.artist) — \(track.title)"
     }
 
-    private func resolveSeedTrack(seedTrackId: String?, client: PlexClient) async throws -> Track {
+    private func resolveSeedTrack(seedTrackId: String?, client: any MusicProvider) async throws -> Track {
         if let seedTrackId {
             guard let track = try await client.getTrack(id: seedTrackId) else {
                 throw PlexodoroError.noCurrentTrack
             }
             return track
         }
-        guard let session = try await client.getSessions() else {
+        guard let track = try await client.getCurrentTrack() else {
             throw PlexodoroError.noCurrentTrack
         }
-        return session.track
+        return track
     }
 
-    private func preparePackedTracks(seedTrack: Track, client: PlexClient) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
+    private func preparePackedTracks(seedTrack: Track, client: any MusicProvider) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
         let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
         let withoutSeed = nearest.filter { $0.id != seedTrack.id }
         let engine = PomodoroEngine()
@@ -154,10 +154,7 @@ class AppState: ObservableObject {
         packed.shuffle()
         let totalSeconds = engine.totalDuration(of: packed)
 
-        let urls: [URL] = packed.compactMap { track in
-            guard !track.key.isEmpty else { return nil }
-            return client.streamURL(for: track)
-        }
+        let urls: [URL] = packed.compactMap { client.streamURL(for: $0) }
 
         guard urls.count == packed.count else {
             throw PlexodoroError.noAudioURL

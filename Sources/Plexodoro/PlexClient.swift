@@ -3,7 +3,7 @@ import OSLog
 
 private let log = Logger(subsystem: "com.mathewhartley.plexodoro", category: "PlexClient")
 
-actor PlexClient {
+actor PlexClient: MusicProvider {
     let serverURL: String
     let token: String
 
@@ -92,6 +92,10 @@ actor PlexClient {
         )
         let container = try decodeContainer(from: data)
         return (container.metadata ?? []).map { $0.toTrack }
+    }
+
+    func getCurrentTrack() async throws -> Track? {
+        try await getSessions()?.track
     }
 
     func getSessions() async throws -> PlexSession? {

@@ -50,6 +50,14 @@ enum PlexodoroError: LocalizedError {
 
 // MARK: - JSON Response Models
 
+struct PlexResponse: Decodable {
+    let mediaContainer: PlexMediaContainer
+
+    enum CodingKeys: String, CodingKey {
+        case mediaContainer = "MediaContainer"
+    }
+}
+
 struct PlexMediaContainer: Decodable {
     let size: Int?
     let metadata: [PlexTrackJSON]?

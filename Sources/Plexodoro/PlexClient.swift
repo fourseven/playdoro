@@ -66,6 +66,10 @@ actor PlexClient {
         _ = try await fetchJSON(path: "/")
     }
 
+    private func decodeContainer(from data: Data) throws -> PlexMediaContainer {
+        try decoder.decode(PlexResponse.self, from: data).mediaContainer
+    }
+
     func searchTracks(query: String, limit: Int = 20) async throws -> [PlexTrack] {
         let data = try await fetchJSON(
             path: "/search",
@@ -75,13 +79,13 @@ actor PlexClient {
                 URLQueryItem(name: "limit", value: String(limit))
             ]
         )
-        let container = try decoder.decode(PlexMediaContainer.self, from: data)
+        let container = try decodeContainer(from: data)
         return (container.metadata ?? []).map { $0.toTrack }
     }
 
     func getSessions() async throws -> PlexSession? {
         let data = try await fetchJSON(path: "/status/sessions")
-        let container = try decoder.decode(PlexMediaContainer.self, from: data)
+        let container = try decodeContainer(from: data)
         guard let track = container.metadata?.first else { return nil }
         return PlexSession(
             track: track.toTrack,
@@ -94,7 +98,7 @@ actor PlexClient {
             path: "/library/metadata/\(trackId)/nearest",
             query: [URLQueryItem(name: "limit", value: String(limit))]
         )
-        let container = try decoder.decode(PlexMediaContainer.self, from: data)
+        let container = try decodeContainer(from: data)
         return (container.metadata ?? []).map { $0.toTrack }
     }
 

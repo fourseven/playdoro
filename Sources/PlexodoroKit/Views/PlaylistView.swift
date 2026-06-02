@@ -40,5 +40,6 @@ struct PlaylistView: View {
                 }
             }
         }
+        .frame(minHeight: 120, maxHeight: 200)
     }
 }

@@ -33,10 +33,10 @@ struct SearchBar: View {
             if isSearching {
                 ProgressView()
                     .scaleEffect(0.8)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 60)
             } else if !searchResults.isEmpty {
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    VStack(spacing: 2) {
                         ForEach(searchResults) { track in
                             Button {
                                 onSelect(track)
@@ -67,15 +67,17 @@ struct SearchBar: View {
                         }
                     }
                 }
-                .frame(maxHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 240, alignment: .top)
             } else if let error = searchError {
                 Text(error)
                     .font(.caption)
                     .foregroundColor(.red)
+                    .frame(maxWidth: .infinity, minHeight: 60)
             } else if !searchText.isEmpty && !isSearching {
                 Text("No tracks found")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
             }
         }
     }

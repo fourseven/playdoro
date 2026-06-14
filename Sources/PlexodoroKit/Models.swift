@@ -12,6 +12,23 @@ func deduplicate(tracks: [Track]) -> [Track] {
     return tracks.filter { seen.insert("\($0.id)-\($0.title)-\($0.artist)").inserted }
 }
 
+enum PomodoroLimits {
+    static let maxSeeds = 3
+}
+
+/// Merge nearest-neighbour batches from multiple seeds, preserving first-occurrence order
+/// and deduping by track id.
+func mergeNearestResults(_ batches: [[Track]]) -> [Track] {
+    var seen = Set<String>()
+    var out: [Track] = []
+    for batch in batches {
+        for track in batch where seen.insert(track.id).inserted {
+            out.append(track)
+        }
+    }
+    return out
+}
+
 struct Track: Identifiable, Equatable {
     let id: String
     let title: String

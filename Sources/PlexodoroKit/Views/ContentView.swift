@@ -125,20 +125,32 @@ struct ContentView: View {
                 searchError: searchError,
                 serverURL: appState.serverURL,
                 token: appState.token,
+                selectedSeeds: appState.seedTracks,
+                maxSeeds: PomodoroLimits.maxSeeds,
                 onSearch: searchDebounce,
-                onSelect: { appState.startPomodoro(seedTrackId: $0.id) }
+                onAdd: { track in
+                    appState.addSeed(track)
+                    searchText = ""
+                    searchResults = []
+                },
+                onRemove: appState.removeSeed,
+                onStart: { seeds in
+                    appState.startPomodoro(seedTracks: seeds)
+                }
             )
 
-            Divider()
+            if appState.seedTracks.isEmpty {
+                Divider()
 
-            Button {
-                appState.startPomodoro(seedTrackId: nil)
-            } label: {
-                Label("Start from current track", systemImage: "play.circle")
-                    .frame(maxWidth: .infinity)
+                Button {
+                    appState.startPomodoro()
+                } label: {
+                    Label("Start from current track", systemImage: "play.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
 
             if let error = appState.errorMessage {
                 Text(error)
@@ -178,6 +190,7 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
     private func performSearch(query: String, taskID: UUID) async {
         guard let client = appState.client else { return }
 

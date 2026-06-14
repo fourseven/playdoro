@@ -22,11 +22,13 @@ class AppState: ObservableObject {
     @Published var currentTrackIndex: Int = 0
     @Published var isDownloading: Bool = false
     @Published var isPlaying: Bool = false
+    @Published var seedTracks: [Track] = []
 
     let player = AudioPlayer()
     var client: (any MusicProvider)?
     private let authManager = PlexAuthManager()
     private var timerSubscription: AnyCancellable?
+    private var startTimerCancellable: AnyCancellable?
     private var isTimerPaused = false
     private var cancellables = Set<AnyCancellable>()
 
@@ -44,6 +46,10 @@ class AppState: ObservableObject {
 
         player.$isPlaying
             .assign(to: \.isPlaying, on: self)
+            .store(in: &cancellables)
+        player.$isPlaying
+            .map { !$0 }
+            .assign(to: \.isTimerPaused, on: self)
             .store(in: &cancellables)
     }
 
@@ -161,10 +167,10 @@ class AppState: ObservableObject {
     // MARK: - Pomodoro
 
     func startPomodoro() {
-        startPomodoro(seedTrackId: nil)
+        startPomodoro(seedTracks: [])
     }
 
-    func startPomodoro(seedTrackId: String?) {
+    func startPomodoro(seedTracks: [Track]) {
         guard state == .idle else { return }
         guard let client = client else {
             errorMessage = "Configure a music provider first"
@@ -176,14 +182,32 @@ class AppState: ObservableObject {
 
         Task {
             do {
-                let seedTrack = try await resolveSeedTrack(seedTrackId: seedTrackId, client: client)
-                let (packed, urls, totalSeconds) = try await preparePackedTracks(seedTrack: seedTrack, client: client)
+                let resolved = try await resolveSeedTracks(seedTracks: seedTracks, client: client)
+                let (packed, urls, totalSeconds) = try await preparePackedTracks(seedTracks: resolved, client: client)
+                self.seedTracks = resolved
                 try await startPlayback(tracks: packed, urls: urls, totalSeconds: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription
                 state = .idle
             }
         }
+    }
+
+    // MARK: - Seed management
+
+    var canAddMoreSeeds: Bool { seedTracks.count < PomodoroLimits.maxSeeds }
+
+    func addSeed(_ track: Track) {
+        guard canAddMoreSeeds, !seedTracks.contains(where: { $0.id == track.id }) else { return }
+        seedTracks.append(track)
+    }
+
+    func removeSeed(_ track: Track) {
+        seedTracks.removeAll { $0.id == track.id }
+    }
+
+    func clearSeeds() {
+        seedTracks = []
     }
 
     private func configurePlayerCallbacks() {
@@ -212,22 +236,24 @@ class AppState: ObservableObject {
         currentTrackIndex = 0
         currentTrackTitle = tracks.first.map { "\($0.artist) — \($0.title)" } ?? ""
 
+        startTimerCancellable = player.$isPlaying
+            .filter { $0 }
+            .first()
+            .sink { [weak self] _ in
+                self?.startTimer(duration: totalSeconds)
+            }
+
         isDownloading = true
         playlistTracks = await player.downloadAndPlay(tracks: tracks, urls: urls)
         isDownloading = false
 
         guard state == .running else { return }
 
-        currentTrackIndex = 0
-        if let first = playlistTracks.first {
-            currentTrackTitle = "\(first.artist) — \(first.title)"
-        } else {
+        if playlistTracks.isEmpty {
             errorMessage = "No tracks could be downloaded"
+            timerSubscription?.cancel()
             state = .idle
-            return
         }
-
-        startTimer(duration: totalSeconds)
     }
 
     private func advanceToNextTrack() {
@@ -241,28 +267,36 @@ class AppState: ObservableObject {
         currentTrackTitle = "\(track.artist) — \(track.title)"
     }
 
-    private func resolveSeedTrack(seedTrackId: String?, client: any MusicProvider) async throws -> Track {
-        if let seedTrackId {
-            guard let track = try await client.getTrack(id: seedTrackId) else {
-                throw PlexodoroError.noCurrentTrack
+    private func resolveSeedTracks(seedTracks: [Track], client: any MusicProvider) async throws -> [Track] {
+        if !seedTracks.isEmpty {
+            return try await withThrowingTaskGroup(of: Track.self) { group in
+                for seed in seedTracks {
+                    group.addTask {
+                        guard let track = try await client.getTrack(id: seed.id) else {
+                            throw PlexodoroError.noCurrentTrack
+                        }
+                        return track
+                    }
+                }
+                var resolved: [Track] = []
+                for try await track in group { resolved.append(track) }
+                return resolved
             }
-            return track
         }
         guard let track = try await client.getCurrentTrack() else {
             throw PlexodoroError.noCurrentTrack
         }
-        return track
+        return [track]
     }
 
-    private func preparePackedTracks(seedTrack: Track, client: any MusicProvider) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
-        let nearest = try await client.getNearest(trackId: seedTrack.id, limit: PomodoroConfig.default.maxCandidates)
-        let withoutSeed = nearest.filter { $0.id != seedTrack.id }
+    private func preparePackedTracks(seedTracks: [Track], client: any MusicProvider) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
+        let nearest = try await client.getNearest(
+            trackIds: seedTracks.map(\.id),
+            limit: PomodoroConfig.default.maxCandidates
+        )
         let engine = PomodoroEngine()
-        let seedSec = seedTrack.duration / 1000
-        let adjustedTarget = max(PomodoroConfig.default.targetDuration - seedSec, PomodoroConfig.default.tolerance)
-        var packed = engine.pack(tracks: withoutSeed, target: adjustedTarget)
+        var packed = engine.pack(tracks: nearest, mustInclude: seedTracks)
         packed = deduplicate(tracks: packed)
-        packed.append(seedTrack)
         packed.shuffle()
         let totalSeconds = engine.totalDuration(of: packed)
 
@@ -288,21 +322,17 @@ class AppState: ObservableObject {
     func stopPomodoro() {
         state = .stopping
         timerSubscription?.cancel()
-        isTimerPaused = false
         player.stop()
         resetState()
     }
 
     func togglePlayback() {
         player.togglePlayPause()
-        isTimerPaused = !player.isPlaying
     }
 
     func pausePlayback() {
         guard state == .running, !isTimerPaused else { return }
         player.pause()
-        isTimerPaused = true
-        isPlaying = false
     }
 
     private func startTimer(duration: TimeInterval) {
@@ -331,7 +361,10 @@ class AppState: ObservableObject {
         currentTrackTitle = ""
         playlistTracks = []
         currentTrackIndex = 0
+        seedTracks = []
         errorMessage = nil
+        startTimerCancellable?.cancel()
+        startTimerCancellable = nil
     }
 
     var formattedTime: String {

@@ -281,3 +281,117 @@ final class ErrorDescriptionTests: XCTestCase {
         }
     }
 }
+
+final class MultiSeedEngineTests: XCTestCase {
+    func makeTrack(id: Int, duration: TimeInterval, distance: Double = 1.0) -> Track {
+        Track(
+            id: String(id),
+            title: "Track \(id)",
+            artist: "Artist",
+            album: "Album",
+            duration: duration * 1000,
+            key: "",
+            thumb: nil,
+            score: distance
+        )
+    }
+
+    func testPackRetainsAllSeeds() {
+        let seeds = [makeTrack(id: 1, duration: 180), makeTrack(id: 2, duration: 200)]
+        let candidates = (3...20).map { makeTrack(id: $0, duration: 60, distance: Double($0) * 0.1) }
+
+        let engine = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 1500,
+            tolerance: 60,
+            maxCandidates: 50
+        ))
+
+        let result = engine.pack(tracks: candidates, mustInclude: seeds, target: 1500)
+
+        for seed in seeds {
+            XCTAssertTrue(result.contains(where: { $0.id == seed.id }), "seed \(seed.id) missing from result")
+        }
+    }
+
+    func testPackReservesSeedDuration() {
+        let seeds = [makeTrack(id: 1, duration: 300), makeTrack(id: 2, duration: 300)]
+        let candidates = (3...30).map { makeTrack(id: $0, duration: 60, distance: Double($0) * 0.1) }
+
+        let engine = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 1200,
+            tolerance: 60,
+            maxCandidates: 50
+        ))
+
+        let result = engine.pack(tracks: candidates, mustInclude: seeds, target: 1200)
+        let total = engine.totalDuration(of: result)
+
+        XCTAssertLessThanOrEqual(total, 1200 + 60)
+        XCTAssertGreaterThanOrEqual(total, 1200 - 60)
+
+        let packedOnly = result.filter { $0.id != "1" && $0.id != "2" }
+        for track in packedOnly {
+            XCTAssertFalse(seeds.contains(where: { $0.id == track.id }))
+        }
+    }
+
+    func testPackWithEmptyMustIncludeStaysWithinBounds() {
+        let candidates = (1...20).map { makeTrack(id: $0, duration: 60, distance: Double($0) * 0.1) }
+
+        let engine = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 600,
+            tolerance: 60,
+            maxCandidates: 50
+        ))
+
+        let result = engine.pack(tracks: candidates, mustInclude: [], target: 600)
+        let total = engine.totalDuration(of: result)
+
+        XCTAssertGreaterThanOrEqual(total, 540)
+        XCTAssertLessThanOrEqual(total, 660)
+        XCTAssertEqual(Set(result.map(\.id)).count, result.count, "expected no duplicate ids")
+    }
+}
+
+final class MergeNearestResultsTests: XCTestCase {
+    func makeTrack(id: Int) -> Track {
+        Track(
+            id: String(id),
+            title: "Track \(id)",
+            artist: "Artist",
+            album: "Album",
+            duration: 180_000,
+            key: "",
+            thumb: nil,
+            score: nil
+        )
+    }
+
+    func testMergesBatchesAndDedupes() {
+        let a = [makeTrack(id: 1), makeTrack(id: 2), makeTrack(id: 3)]
+        let b = [makeTrack(id: 2), makeTrack(id: 4)]
+        let c = [makeTrack(id: 5)]
+
+        let result = mergeNearestResults([a, b, c])
+
+        XCTAssertEqual(result.map(\.id), ["1", "2", "3", "4", "5"])
+    }
+
+    func testEmptyAndNonEmptyCombinations() {
+        let track = makeTrack(id: 1)
+
+        XCTAssertEqual(mergeNearestResults([]), [])
+        XCTAssertEqual(mergeNearestResults([[], []]), [])
+        XCTAssertEqual(mergeNearestResults([[], [track]]).map(\.id), ["1"])
+        XCTAssertEqual(mergeNearestResults([[track], []]).map(\.id), ["1"])
+    }
+
+    func testPreservesFirstOccurrenceOrder() {
+        let a = [makeTrack(id: 9), makeTrack(id: 1)]
+        let b = [makeTrack(id: 1), makeTrack(id: 9)]
+
+        let result = mergeNearestResults([a, b])
+
+        XCTAssertEqual(result.map(\.id), ["9", "1"])
+    }
+}

@@ -4,6 +4,14 @@ struct PlaylistView: View {
     let tracks: [Track]
     let currentTrackIndex: Int
     let isDownloading: Bool
+    let isSeed: (Track) -> Bool
+
+    init(tracks: [Track], currentTrackIndex: Int, isDownloading: Bool, isSeed: @escaping (Track) -> Bool = { _ in false }) {
+        self.tracks = tracks
+        self.currentTrackIndex = currentTrackIndex
+        self.isDownloading = isDownloading
+        self.isSeed = isSeed
+    }
 
     var body: some View {
         ScrollView {
@@ -24,6 +32,11 @@ struct PlaylistView: View {
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                                 .frame(width: 12, alignment: .trailing)
+                        }
+                        if isSeed(track) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 7))
+                                .foregroundColor(.yellow)
                         }
                         Text(track.title)
                             .font(.caption2)

@@ -25,6 +25,19 @@ struct PomodoroEngine {
         return selected
     }
 
+    /// Pack tracks around a set of must-include seeds. Seed duration is reserved from the
+    /// target before packing so the final playlist (packed + seeds) stays within tolerance.
+    /// Seeds are appended in caller-supplied order; caller is responsible for shuffling.
+    func pack(tracks: [Track], mustInclude: [Track], target: TimeInterval? = nil) -> [Track] {
+        let target = target ?? config.targetDuration
+        let seedDuration = mustInclude.reduce(0) { $0 + $1.duration / 1000 }
+        let seedIds = Set(mustInclude.map(\.id))
+        let candidates = tracks.filter { !seedIds.contains($0.id) }
+        let adjustedTarget = max(target - seedDuration, config.tolerance)
+        let packed = pack(tracks: candidates, target: adjustedTarget)
+        return packed + mustInclude
+    }
+
     func totalDuration(of tracks: [Track]) -> TimeInterval {
         tracks.reduce(0) { $0 + $1.duration / 1000 }
     }

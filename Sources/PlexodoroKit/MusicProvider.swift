@@ -14,4 +14,22 @@ extension MusicProvider {
     func searchTracks(query: String) async throws -> [Track] {
         try await searchTracks(query: query, limit: 20)
     }
+
+    func getNearest(trackIds: [String], limit: Int) async throws -> [Track] {
+        guard !trackIds.isEmpty else { return [] }
+        let perId = max(1, limit / trackIds.count)
+
+        return try await withThrowingTaskGroup(of: [Track].self) { group in
+            for id in trackIds {
+                group.addTask { [self] in
+                    try await self.getNearest(trackId: id, limit: perId)
+                }
+            }
+            var batches: [[Track]] = []
+            for try await batch in group {
+                batches.append(batch)
+            }
+            return mergeNearestResults(batches)
+        }
+    }
 }

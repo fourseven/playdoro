@@ -23,6 +23,7 @@ class AppState: ObservableObject {
     @Published var isDownloading: Bool = false
     @Published var isPlaying: Bool = false
     @Published var seedTracks: [Track] = []
+    @Published var savedPlaylists: [SeedPlaylist] = []
 
     let player = AudioPlayer()
     var client: (any MusicProvider)?
@@ -43,6 +44,8 @@ class AppState: ObservableObject {
             serverName = savedName
             verifySavedConnection(token: savedToken)
         }
+
+        savedPlaylists = Self.loadSavedPlaylists()
 
         player.$isPlaying
             .assign(to: \.isPlaying, on: self)
@@ -193,6 +196,10 @@ class AppState: ObservableObject {
         }
     }
 
+    func startPomodoro(savedPlaylist: SeedPlaylist) {
+        startPomodoro(seedTracks: savedPlaylist.seeds)
+    }
+
     // MARK: - Seed management
 
     var canAddMoreSeeds: Bool { seedTracks.count < PomodoroLimits.maxSeeds }
@@ -208,6 +215,38 @@ class AppState: ObservableObject {
 
     func clearSeeds() {
         seedTracks = []
+    }
+
+    // MARK: - Saved playlists
+
+    private func recordPlaylist(seeds: [Track]) {
+        guard !seeds.isEmpty else { return }
+        let playlist = SeedPlaylist(seeds: seeds)
+        savedPlaylists = mergeSavedPlaylists(
+            existing: savedPlaylists,
+            added: playlist,
+            maxRetained: PomodoroLimits.savedPlaylistsMax
+        )
+        Self.persistSavedPlaylists(savedPlaylists)
+    }
+
+    private static func loadSavedPlaylists() -> [SeedPlaylist] {
+        guard let data = UserDefaults.standard.data(forKey: UserDefaultsKey.savedPlaylists) else { return [] }
+        do {
+            return try JSONDecoder().decode([SeedPlaylist].self, from: data)
+        } catch {
+            log.warning("Failed to decode savedPlaylists: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    private static func persistSavedPlaylists(_ playlists: [SeedPlaylist]) {
+        do {
+            let data = try JSONEncoder().encode(playlists)
+            UserDefaults.standard.set(data, forKey: UserDefaultsKey.savedPlaylists)
+        } catch {
+            log.warning("Failed to encode savedPlaylists: \(error.localizedDescription)")
+        }
     }
 
     private func configurePlayerCallbacks() {
@@ -253,7 +292,10 @@ class AppState: ObservableObject {
             errorMessage = "No tracks could be downloaded"
             timerSubscription?.cancel()
             state = .idle
+            return
         }
+
+        recordPlaylist(seeds: self.seedTracks)
     }
 
     private func advanceToNextTrack() {

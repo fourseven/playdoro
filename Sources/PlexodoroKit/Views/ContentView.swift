@@ -118,6 +118,17 @@ struct ContentView: View {
 
     private var idleView: some View {
         VStack(spacing: 10) {
+            if !appState.savedPlaylists.isEmpty {
+                RecentPlaylistsView(
+                    playlists: appState.savedPlaylists,
+                    serverURL: appState.serverURL,
+                    token: appState.token,
+                    onTap: { playlist in
+                        appState.startPomodoro(savedPlaylist: playlist)
+                    }
+                )
+            }
+
             SearchBar(
                 searchText: $searchText,
                 isSearching: isSearching,

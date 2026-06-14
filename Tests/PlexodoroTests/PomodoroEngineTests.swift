@@ -395,3 +395,78 @@ final class MergeNearestResultsTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), ["9", "1"])
     }
 }
+
+final class SavedPlaylistsTests: XCTestCase {
+    func makeTrack(id: Int) -> Track {
+        Track(
+            id: String(id),
+            title: "Track \(id)",
+            artist: "Artist",
+            album: "Album",
+            duration: 180_000,
+            key: "",
+            thumb: nil,
+            score: nil
+        )
+    }
+
+    func makePlaylist(id: UUID = UUID(), date: Date = Date(), seedIds: [Int]) -> SeedPlaylist {
+        SeedPlaylist(id: id, savedAt: date, seeds: seedIds.map { makeTrack(id: $0) })
+    }
+
+    func testEmptyExistingPrependsNew() {
+        let added = makePlaylist(seedIds: [1, 2])
+        let result = mergeSavedPlaylists(existing: [], added: added, maxRetained: 3)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.id, added.id)
+    }
+
+    func testCapsAtMaxRetained() {
+        let a = makePlaylist(seedIds: [1])
+        let b = makePlaylist(seedIds: [2])
+        let c = makePlaylist(seedIds: [3])
+        let d = makePlaylist(seedIds: [4])
+        let result = mergeSavedPlaylists(existing: [a, b, c], added: d, maxRetained: 3)
+        XCTAssertEqual(result.map(\.id), [d.id, a.id, b.id])
+    }
+
+    func testDedupesBySignatureAndMovesToFront() {
+        let original = makePlaylist(seedIds: [1, 2])
+        let other = makePlaylist(seedIds: [3])
+        let reRecorded = makePlaylist(seedIds: [1, 2])
+        let result = mergeSavedPlaylists(
+            existing: [original, other],
+            added: reRecorded,
+            maxRetained: 3
+        )
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0].id, reRecorded.id)
+        XCTAssertEqual(result[1].id, other.id)
+    }
+
+    func testSignatureIgnoresSeedOrder() {
+        let a = makePlaylist(seedIds: [1, 2, 3])
+        let b = makePlaylist(seedIds: [3, 1, 2])
+        let result = mergeSavedPlaylists(existing: [a], added: b, maxRetained: 3)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, b.id)
+    }
+
+    func testCodableRoundTrip() throws {
+        let original = makePlaylist(seedIds: [1, 2, 3])
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(SeedPlaylist.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testListCodableRoundTrip() throws {
+        let original = [
+            makePlaylist(seedIds: [1]),
+            makePlaylist(seedIds: [2, 3]),
+            makePlaylist(seedIds: [4, 5, 6]),
+        ]
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode([SeedPlaylist].self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+}

@@ -5,6 +5,7 @@ enum UserDefaultsKey {
     static let plexToken = "plexToken"
     static let serverName = "serverName"
     static let plexClientId = "plexClientId"
+    static let savedPlaylists = "savedPlaylists"
 }
 
 func deduplicate(tracks: [Track]) -> [Track] {
@@ -14,6 +15,7 @@ func deduplicate(tracks: [Track]) -> [Track] {
 
 enum PomodoroLimits {
     static let maxSeeds = 3
+    static let savedPlaylistsMax = 3
 }
 
 /// Merge nearest-neighbour batches from multiple seeds, preserving first-occurrence order
@@ -29,7 +31,7 @@ func mergeNearestResults(_ batches: [[Track]]) -> [Track] {
     return out
 }
 
-struct Track: Identifiable, Equatable {
+struct Track: Identifiable, Equatable, Codable {
     let id: String
     let title: String
     let artist: String
@@ -39,6 +41,30 @@ struct Track: Identifiable, Equatable {
     let thumb: String?
     let score: Double?
     var isDownloaded = false
+}
+
+struct SeedPlaylist: Codable, Identifiable, Equatable {
+    let id: UUID
+    let savedAt: Date
+    let seeds: [Track]
+
+    init(id: UUID = UUID(), savedAt: Date = Date(), seeds: [Track]) {
+        self.id = id
+        self.savedAt = savedAt
+        self.seeds = seeds
+    }
+
+    /// Stable signature for dedup: order-insensitive set of seed ids.
+    var signature: [String] { seeds.map(\.id).sorted() }
+}
+
+/// Pure helper: prepend a freshly-played playlist to the saved list, deduping by
+/// seed-id signature, then cap at `maxRetained` (oldest dropped). Used by AppState
+/// after a successful pomodoro start.
+func mergeSavedPlaylists(existing: [SeedPlaylist], added: SeedPlaylist, maxRetained: Int) -> [SeedPlaylist] {
+    let addedSig = added.signature
+    let filtered = existing.filter { $0.signature != addedSig }
+    return ([added] + filtered).prefix(maxRetained).map { $0 }
 }
 
 struct PlexSession {

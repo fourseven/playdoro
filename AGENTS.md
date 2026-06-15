@@ -9,7 +9,7 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
 - **iOS:** `xcodebuild -scheme Plexodoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
 - **Device:** `xcodebuild -scheme Plexodoro -destination "platform=iOS,name=<device>" build -allowProvisioningUpdates`
 - No lint, formatter, or CI configured.
-- Single SPM package, no Xcode project (SPM generates one; `DerivedData/` gitignored).
+- SPM package for macOS (`Plexodoro` executable + `PlexodoroKit` library) plus a separate `iOSApp/Plexodoro.xcodeproj` for iOS (`DerivedData/` gitignored).
 
 ## Dependencies
 

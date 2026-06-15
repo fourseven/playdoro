@@ -6,74 +6,102 @@ struct ActiveSessionView: View {
     let token: String
 
     var body: some View {
-        VStack(spacing: 6) {
-            if !appState.seedTracks.isEmpty {
-                SeedChipsRow(seeds: appState.seedTracks, serverURL: serverURL, token: token)
-            }
+        VStack(spacing: 16) {
+            AlbumArt(url: currentThumbURL)
+                .frame(width: 160, height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
 
-            ZStack {
-                AlbumArt(url: currentThumbURL)
-                    .frame(width: 140, height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
+            VStack(spacing: 2) {
                 Text(appState.formattedTime)
-                    .font(.system(size: 36, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 4)
+                    .font(.system(size: 48, weight: .bold, design: .monospaced))
                     .contentTransition(.numericText())
-            }
-            .padding(.vertical, 4)
+                    .foregroundColor(.primary)
 
-            if !appState.currentTrackTitle.isEmpty {
-                Text(appState.currentTrackTitle)
+                Text("remaining")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .lineLimit(2)
             }
 
-            if !appState.playlistTracks.isEmpty {
-                HStack(spacing: 6) {
-                    ProgressView(value: appState.player.currentProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.accentColor)
-                    Text(currentTrackTime)
+            VStack(spacing: 4) {
+                ProgressView(value: appState.player.currentProgress)
+                    .progressViewStyle(.linear)
+                    .tint(.accentColor)
+
+                HStack {
+                    Text(currentTrackElapsed)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                    Spacer()
+                    Text(currentTrackRemaining)
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .monospacedDigit()
                 }
-                .frame(height: 16)
-
-                Divider()
-                PlaylistView(
-                    tracks: appState.playlistTracks,
-                    currentTrackIndex: appState.currentTrackIndex,
-                    isDownloading: appState.isDownloading,
-                    isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) }
-                )
             }
 
-            HStack(spacing: 12) {
+            if !appState.currentTrackTitle.isEmpty {
+                Text(appState.currentTrackTitle)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            HStack(spacing: 16) {
                 Button {
                     appState.togglePlayback()
                 } label: {
                     Image(systemName: appState.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
                 .disabled(appState.playlistTracks.isEmpty)
 
-                Button("Stop") {
+                Button {
                     appState.stopPomodoro()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)
-                .controlSize(.small)
+                .controlSize(.regular)
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Slider(value: $appState.player.volume, in: 0...1)
+                    .frame(maxWidth: 160)
+
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             if appState.state == .finished {
                 Text("Pomodoro complete!")
                     .font(.caption)
                     .foregroundColor(.green)
+            }
+
+            if !appState.playlistTracks.isEmpty {
+                Divider()
+
+                PlaylistView(
+                    tracks: appState.playlistTracks,
+                    currentTrackIndex: appState.currentTrackIndex,
+                    isDownloading: appState.isDownloading,
+                    serverURL: serverURL,
+                    token: token,
+                    isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) }
+                )
             }
         }
     }
@@ -85,49 +113,28 @@ struct ActiveSessionView: View {
         return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
     }
 
-    private var currentTrackTime: String {
+    private var currentTrackDurationSeconds: TimeInterval {
         let i = appState.currentTrackIndex
-        guard i < appState.playlistTracks.count else { return "0:00" }
-        let totalSec = appState.playlistTracks[i].duration / 1000
-        let elapsedSec = Double(totalSec) * appState.player.currentProgress
-        let remainingSec = max(0, Int(totalSec) - Int(elapsedSec))
-        return String(format: "%d:%02d", remainingSec / 60, remainingSec % 60)
-    }
-}
-
-struct SeedChipsRow: View {
-    let seeds: [Track]
-    let serverURL: String
-    let token: String
-
-    private func thumbURL(for track: Track) -> URL? {
-        guard let thumb = track.thumb else { return nil }
-        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
+        guard i < appState.playlistTracks.count else { return 0 }
+        return appState.playlistTracks[i].duration / 1000
     }
 
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "leaf.fill")
-                .foregroundColor(.green)
-                .font(.caption2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(seeds) { track in
-                        HStack(spacing: 3) {
-                            AlbumArt(url: thumbURL(for: track))
-                                .frame(width: 14, height: 14)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                            Text(track.title)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.15))
-                        .cornerRadius(3)
-                    }
-                }
-            }
-        }
+    private var currentTrackElapsed: String {
+        let duration = currentTrackDurationSeconds
+        guard duration > 0 else { return "0:00" }
+        let elapsed = duration * appState.player.currentProgress
+        return format(seconds: elapsed)
+    }
+
+    private var currentTrackRemaining: String {
+        let duration = currentTrackDurationSeconds
+        guard duration > 0 else { return "0:00" }
+        let elapsed = duration * appState.player.currentProgress
+        return "-" + format(seconds: max(0, duration - elapsed))
+    }
+
+    private func format(seconds: TimeInterval) -> String {
+        let total = Int(seconds)
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }

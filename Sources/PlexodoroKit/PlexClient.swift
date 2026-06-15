@@ -21,12 +21,18 @@ actor PlexClient: MusicProvider {
 
     deinit { session.invalidateAndCancel() }
 
-    private func url(path: String, query: [URLQueryItem] = []) -> URL {
+    func url(path: String, query: [URLQueryItem] = []) -> URL {
         var components = URLComponents(string: "\(serverURL)\(path)")!
-        var items = query
-        items.append(URLQueryItem(name: "X-Plex-Token", value: token))
-        components.queryItems = items
+        var items = query.map { URLQueryItem(name: $0.name, value: percentEncode($0.value ?? "")) }
+        items.append(URLQueryItem(name: "X-Plex-Token", value: percentEncode(token)))
+        components.percentEncodedQueryItems = items
         return components.url!
+    }
+
+    private func percentEncode(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     private func fetchJSON(path: String, query: [URLQueryItem] = [], method: String = "GET") async throws -> Data {

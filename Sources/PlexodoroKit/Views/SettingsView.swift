@@ -25,6 +25,24 @@ struct SettingsView: View {
 
                 Divider()
 
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Picker("EQ", selection: Binding(
+                        get: { appState.currentEQPreset },
+                        set: { appState.applyEQ(preset: $0) }
+                    )) {
+                        ForEach(EQPreset.settingsPresets) { preset in
+                            Text(preset.name).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Divider()
+
                 Button("Disconnect", role: .destructive) {
                     appState.disconnect()
                 }

@@ -37,18 +37,23 @@ class AudioPlayer: ObservableObject {
     @Published var isPlaying = false
     @Published var downloadProgress: Double = 0
     @Published var currentProgress: Double = 0
+    @Published var volume: Float = 1.0 {
+        didSet { playerNode?.volume = volume }
+    }
 
-    private var player: AVQueuePlayer?
-    private var boundaryObserver: Any?
-    private var itemEndObservers: [NSObjectProtocol] = []
-    private var itemStatusObservations: [NSKeyValueObservation] = []
-    private var hasHandledPlaylistEnd = false
-    private var tempFiles: [URL] = []
+    private var engine: AVAudioEngine?
+    private var playerNode: AVAudioPlayerNode?
+    private var eq: AudioEQ?
+
+    private var audioFiles: [AVAudioFile] = []
+    private var tracks: [Track] = []
+    private var currentTrackIndex = -1
     private var playSessionID = UUID()
-    private var playerItems: [AVPlayerItem] = []
-    private var playlistEndIndex = -1
+    private var hasHandledPlaylistEnd = false
+    private var shouldStopAfterCurrentTrack = false
     private var progressTimer: Timer?
 
+    private let cache = TrackCache()
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -61,9 +66,9 @@ class AudioPlayer: ObservableObject {
     var onTrackDownloaded: ((Track) -> Void)?
 
     var remainingOnCurrentTrack: TimeInterval {
-        guard let player = player, let item = player.currentItem else { return 0 }
-        let duration = CMTimeGetSeconds(item.duration)
-        let current = CMTimeGetSeconds(player.currentTime())
+        guard currentTrackIndex < audioFiles.count else { return 0 }
+        let duration = currentTrackDuration
+        let current = currentTrackTime
         guard duration.isFinite, current.isFinite else { return 0 }
         return max(0, duration - current)
     }
@@ -100,6 +105,12 @@ class AudioPlayer: ObservableObject {
             return nil
         }
 
+        let ext = secureURL.pathExtension.isEmpty ? "bin" : secureURL.pathExtension
+        if let cachedURL = await cache.localURL(for: track, extension: ext) {
+            fileLog("  Cache hit → \(cachedURL.lastPathComponent)")
+            return cachedURL
+        }
+
         do {
             let (data, response) = try await self.session.data(from: secureURL)
             if let httpResponse = response as? HTTPURLResponse {
@@ -116,14 +127,9 @@ class AudioPlayer: ObservableObject {
                 return nil
             }
 
-            let ext = secureURL.pathExtension.isEmpty ? "bin" : secureURL.pathExtension
-            let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(i)_\(track.id)")
-                .appendingPathExtension(ext)
-            try data.write(to: tempURL)
-            fileLog("  Saved → \(tempURL.lastPathComponent)")
-            tempFiles.append(tempURL)
-            return tempURL
+            let localURL = try await cache.store(data: data, for: track, extension: ext)
+            fileLog("  Saved → \(localURL.lastPathComponent)")
+            return localURL
         } catch {
             let nsError = error as NSError
             fileErr("  Failed: \(error.localizedDescription)")
@@ -155,7 +161,7 @@ class AudioPlayer: ObservableObject {
         configureAudioSession()
         setIdleTimerDisabled(true)
         try? FileManager.default.removeItem(at: fileLogURL)
-        fileLog("Downloading \(tracks.count) tracks, playing first immediately...")
+        fileLog("Downloading \(tracks.count) tracks, playing first immediately…")
 
         let sessionID = startNewSession()
         var successfulTracks: [Track] = []
@@ -173,7 +179,10 @@ class AudioPlayer: ObservableObject {
         let sessionID = UUID()
         playSessionID = sessionID
         hasHandledPlaylistEnd = false
-        playlistEndIndex = -1
+        shouldStopAfterCurrentTrack = false
+        audioFiles = []
+        self.tracks = []
+        currentTrackIndex = -1
         return sessionID
     }
 
@@ -183,31 +192,100 @@ class AudioPlayer: ObservableObject {
         successfulTracks.append(track)
         onTrackDownloaded?(track)
 
-        let item = AVPlayerItem(url: local.url)
-        playerItems.append(item)
+        guard let audioFile = try? AVAudioFile(forReading: local.url) else {
+            fileErr("Failed to open audio file for \(local.url.lastPathComponent)")
+            return
+        }
 
-        let trackIndex = successfulTracks.count - 1
-        addObservers(to: item, index: trackIndex, sessionID: sessionID)
-        fileLog("  Item \(trackIndex): url=\(local.url.lastPathComponent)")
+        audioFiles.append(audioFile)
+        self.tracks.append(track)
+        let index = audioFiles.count - 1
+        fileLog("  Audio file \(index): \(local.url.lastPathComponent), \(audioFile.length) frames @ \(audioFile.processingFormat.sampleRate) Hz")
 
-        if player == nil {
-            fileLog("Creating AVQueuePlayer with first track")
-            let queuePlayer = AVQueuePlayer(items: [item])
-            self.player = queuePlayer
-            queuePlayer.play()
+        if engine == nil {
+            setupEngine(with: audioFile.processingFormat)
+        }
+
+        scheduleFile(at: index, sessionID: sessionID)
+
+        if index == 0 {
+            currentTrackIndex = 0
+            startEngineAndPlay(sessionID: sessionID)
+        }
+    }
+
+    private func setupEngine(with format: AVAudioFormat) {
+        fileLog("Setting up AVAudioEngine")
+        let engine = AVAudioEngine()
+        let playerNode = AVAudioPlayerNode()
+        let eq = AudioEQ()
+
+        engine.attach(playerNode)
+        engine.attach(eq.eqNode)
+
+        engine.connect(playerNode, to: eq.eqNode, format: format)
+        engine.connect(eq.eqNode, to: engine.mainMixerNode, format: format)
+
+        playerNode.volume = volume
+
+        self.engine = engine
+        self.playerNode = playerNode
+        self.eq = eq
+    }
+
+    private func startEngineAndPlay(sessionID: UUID) {
+        guard let engine = engine, let playerNode = playerNode else { return }
+        do {
+            try engine.start()
+            playerNode.play()
             isPlaying = true
             startProgressUpdates()
-            fileLog("Playback started, rate: \(queuePlayer.rate)")
+            fileLog("Engine started and playback begun")
+        } catch {
+            fileErr("Failed to start audio engine: \(error.localizedDescription)")
+            isPlaying = false
+        }
+    }
+
+    private func scheduleFile(at index: Int, sessionID: UUID) {
+        guard index < audioFiles.count else { return }
+        let file = audioFiles[index]
+        fileLog("Scheduling track \(index): \(file.url.lastPathComponent)")
+        playerNode?.scheduleFile(file, at: nil) { [weak self] in
+            Task { @MainActor in
+                self?.trackDidFinish(index: index, sessionID: sessionID)
+            }
+        }
+    }
+
+    private func trackDidFinish(index: Int, sessionID: UUID) {
+        guard playSessionID == sessionID, !hasHandledPlaylistEnd else {
+            fileLog("Track \(index) finished — ignored (session mismatch or already ended)")
+            return
+        }
+
+        fileLog("Track \(index) finished")
+
+        if shouldStopAfterCurrentTrack || index == audioFiles.count - 1 {
+            hasHandledPlaylistEnd = true
+            isPlaying = false
+            stopProgressUpdates()
+            if shouldStopAfterCurrentTrack {
+                fileLog("Stopped after current track")
+                stop()
+                onStoppedAtTrackEnd?()
+            } else {
+                fileLog("Playlist finished")
+                onPlaylistFinished?()
+            }
         } else {
-            player?.insert(item, after: nil)
-            fileLog("Inserted track \(trackIndex), queue: \(player?.items().count ?? 0)")
+            currentTrackIndex = index + 1
+            onTrackFinished?()
         }
     }
 
     private func cancelSession() -> [Track] {
         fileLog("Session expired (stop was called), discarding remaining downloads")
-        for url in tempFiles { try? FileManager.default.removeItem(at: url) }
-        tempFiles = []
         return []
     }
 
@@ -220,95 +298,39 @@ class AudioPlayer: ObservableObject {
             return []
         }
 
-        playlistEndIndex = totalTracks - 1
-
-        if let player, player.items().isEmpty, isPlaying {
-            fileLog("Queue already empty — signalling playlist end")
+        if let engine = engine, !engine.isRunning, !isPlaying {
+            fileLog("Engine not running after downloads — signalling playlist end")
             hasHandledPlaylistEnd = true
-            isPlaying = false
             onPlaylistFinished?()
         }
 
         return successfulTracks
     }
 
-    private func addObservers(to item: AVPlayerItem, index: Int, sessionID: UUID) {
-        let statusObs = item.observe(\.status, options: [.new, .old]) { item, _ in
-            let label = statusLabel(item.status)
-            fileLog("Item \(index) status: \(item.status.rawValue) (\(label))")
-            if item.status == .failed, let err = item.error {
-                fileErr("  Item \(index) error: \(err.localizedDescription)")
-            }
-        }
-        itemStatusObservations.append(statusObs)
-
-        let endObs = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item,
-            queue: .main
-        ) { [weak self] _ in
-            fileLog("AVPlayerItemDidPlayToEndTime for track \(index)")
-            guard let self = self else { return }
-            Task { @MainActor in
-                guard self.playSessionID == sessionID, !self.hasHandledPlaylistEnd else {
-                    fileLog("  Ignored")
-                    return
-                }
-
-                if index == self.playlistEndIndex {
-                    fileLog("  Last track — playlist finished")
-                    self.hasHandledPlaylistEnd = true
-                    self.isPlaying = false
-                    self.onPlaylistFinished?()
-                } else {
-                    fileLog("  Track ended, signalling onTrackFinished")
-                    self.onTrackFinished?()
-                }
-            }
-        }
-        itemEndObservers.append(endObs)
-    }
-
     func stopAfterCurrentTrack() {
         fileLog("stopAfterCurrentTrack() called")
-        guard let player = player, let currentItem = player.currentItem else {
+        guard playerNode != nil, currentTrackIndex < audioFiles.count else {
             fileLog("  No player or current item, calling stop() directly")
             stop()
             onStoppedAtTrackEnd?()
             return
         }
-
-        removeBoundaryObserver()
-        hasHandledPlaylistEnd = true
-
-        let endTime = CMTimeMultiplyByFloat64(currentItem.duration, multiplier: 0.99)
-        fileLog("  Setting boundary observer at \(CMTimeGetSeconds(endTime))s (99% of \(CMTimeGetSeconds(currentItem.duration))s)")
-        boundaryObserver = player.addBoundaryTimeObserver(
-            forTimes: [NSValue(time: endTime)],
-            queue: .main
-        ) { [weak self] in
-            fileLog("  Boundary observer fired — stopping")
-            guard let self = self else { return }
-            Task { @MainActor in
-                self.stop()
-                self.onStoppedAtTrackEnd?()
-            }
-        }
+        shouldStopAfterCurrentTrack = true
+        fileLog("  Will stop after track \(currentTrackIndex)")
     }
 
     func pause() {
-        guard let player = player else {
+        guard let playerNode = playerNode else {
             fileErr("pause: no player")
             return
         }
-        fileLog("Pausing (rate was \(player.rate))")
-        player.pause()
+        fileLog("Pausing")
+        playerNode.pause()
         isPlaying = false
-        fileLog("  rate now \(player.rate)")
     }
 
     func togglePlayPause() {
-        guard let player = player else {
+        guard let playerNode = playerNode else {
             fileErr("togglePlayPause: no player")
             return
         }
@@ -316,30 +338,54 @@ class AudioPlayer: ObservableObject {
             pause()
         } else {
             fileLog("Resuming")
-            player.play()
+            playerNode.play()
             isPlaying = true
-            fileLog("  rate now \(player.rate)")
         }
     }
 
     func stop() {
         fileLog("STOP — playSessionID was \(playSessionID)")
         playSessionID = UUID()
-        playlistEndIndex = -1
+        shouldStopAfterCurrentTrack = false
         stopProgressUpdates()
-        removeObservers()
-        player?.pause()
-        fileLog("  player.pause(), rate=\(player?.rate ?? -1.0)")
-        player?.removeAllItems()
-        player = nil
-        playerItems = []
+        playerNode?.stop()
+        engine?.stop()
+        playerNode = nil
+        engine = nil
+        eq = nil
+        audioFiles = []
+        tracks = []
+        currentTrackIndex = -1
         isPlaying = false
-        cleanupTempFiles()
         setIdleTimerDisabled(false)
         fileLog("STOP complete")
     }
 
+    // MARK: - EQ
+
+    func applyEQ(preset: EQPreset) {
+        eq?.apply(preset: preset)
+        fileLog("Applied EQ preset: \(preset.name)")
+    }
+
+    var currentEQPreset: EQPreset {
+        eq?.currentPreset ?? .flat
+    }
+
     // MARK: - Progress
+
+    private var currentTrackDuration: TimeInterval {
+        guard currentTrackIndex >= 0, currentTrackIndex < audioFiles.count else { return 0 }
+        let file = audioFiles[currentTrackIndex]
+        return Double(file.length) / file.processingFormat.sampleRate
+    }
+
+    private var currentTrackTime: TimeInterval {
+        guard let playerNode = playerNode,
+              let lastRenderTime = playerNode.lastRenderTime,
+              let playerTime = playerNode.playerTime(forNodeTime: lastRenderTime) else { return 0 }
+        return Double(playerTime.sampleTime) / playerTime.sampleRate
+    }
 
     private func startProgressUpdates() {
         stopProgressUpdates()
@@ -358,58 +404,12 @@ class AudioPlayer: ObservableObject {
     }
 
     private func refreshProgress() {
-        guard let player = player, let item = player.currentItem else {
-            currentProgress = 0
-            return
-        }
-        let duration = CMTimeGetSeconds(item.duration)
-        let current = CMTimeGetSeconds(player.currentTime())
+        let duration = currentTrackDuration
+        let current = currentTrackTime
         guard duration.isFinite, current.isFinite, duration > 0 else {
             currentProgress = 0
             return
         }
         currentProgress = current / duration
-    }
-
-    // MARK: - Cleanup
-
-    private func cleanupTempFiles() {
-        fileLog("Cleaning up \(tempFiles.count) temp files")
-        for url in tempFiles {
-            try? FileManager.default.removeItem(at: url)
-        }
-        tempFiles = []
-    }
-
-    private func removeBoundaryObserver() {
-        guard let observer = boundaryObserver else { return }
-        player?.removeTimeObserver(observer)
-        boundaryObserver = nil
-        fileLog("Boundary observer removed")
-    }
-
-    private func removeObservers() {
-        removeBoundaryObserver()
-
-        for observer in itemEndObservers {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        itemEndObservers = []
-        fileLog("Item end observers removed: all cleared")
-
-        for obs in itemStatusObservations {
-            obs.invalidate()
-        }
-        itemStatusObservations = []
-        fileLog("Item status observations invalidated")
-    }
-}
-
-private func statusLabel(_ status: AVPlayerItem.Status) -> String {
-    switch status {
-    case .unknown: return "unknown"
-    case .readyToPlay: return "readyToPlay"
-    case .failed: return "failed"
-    @unknown default: return "unknown(\(status.rawValue))"
     }
 }

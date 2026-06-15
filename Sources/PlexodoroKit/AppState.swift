@@ -25,7 +25,7 @@ class AppState: ObservableObject {
     @Published var seedTracks: [Track] = []
     @Published var savedPlaylists: [SeedPlaylist] = []
 
-    let player = AudioPlayer()
+    var player = AudioPlayer()
     var client: (any MusicProvider)?
     private let authManager = PlexAuthManager()
     private var timerSubscription: AnyCancellable?
@@ -46,6 +46,7 @@ class AppState: ObservableObject {
         }
 
         savedPlaylists = Self.loadSavedPlaylists()
+        loadSavedEQPreset()
 
         player.$isPlaying
             .assign(to: \.isPlaying, on: self)
@@ -370,6 +371,21 @@ class AppState: ObservableObject {
 
     func togglePlayback() {
         player.togglePlayPause()
+    }
+
+    func applyEQ(preset: EQPreset) {
+        player.applyEQ(preset: preset)
+        UserDefaults.standard.set(preset.id, forKey: UserDefaultsKey.eqPresetID)
+    }
+
+    var currentEQPreset: EQPreset {
+        player.currentEQPreset
+    }
+
+    private func loadSavedEQPreset() {
+        let savedID = UserDefaults.standard.string(forKey: UserDefaultsKey.eqPresetID)
+        let preset = EQPreset.settingsPresets.first { $0.id == savedID } ?? .flat
+        player.applyEQ(preset: preset)
     }
 
     func pausePlayback() {

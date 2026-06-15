@@ -4,55 +4,106 @@ struct PlaylistView: View {
     let tracks: [Track]
     let currentTrackIndex: Int
     let isDownloading: Bool
+    let serverURL: String
+    let token: String
     let isSeed: (Track) -> Bool
 
-    init(tracks: [Track], currentTrackIndex: Int, isDownloading: Bool, isSeed: @escaping (Track) -> Bool = { _ in false }) {
+    init(
+        tracks: [Track],
+        currentTrackIndex: Int,
+        isDownloading: Bool,
+        serverURL: String,
+        token: String,
+        isSeed: @escaping (Track) -> Bool = { _ in false }
+    ) {
         self.tracks = tracks
         self.currentTrackIndex = currentTrackIndex
         self.isDownloading = isDownloading
+        self.serverURL = serverURL
+        self.token = token
         self.isSeed = isSeed
     }
 
+    private func thumbURL(for track: Track) -> URL? {
+        guard let thumb = track.thumb else { return nil }
+        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 1) {
-                ForEach(Array(tracks.enumerated()), id: \.element.id) { i, track in
-                    HStack(spacing: 4) {
-                        if i == currentTrackIndex {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 7))
-                                .foregroundColor(.green)
-                                .frame(width: 12)
-                        } else if isDownloading && !track.isDownloaded {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                                .frame(width: 11, height: 11)
-                        } else {
-                            Text("\(i + 1).")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .frame(width: 12, alignment: .trailing)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: "list.bullet")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text("Up next")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\(tracks.count) tracks")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { i, track in
+                        HStack(spacing: 8) {
+                            thumbnail(for: i, track: track)
+                                .frame(width: 36, height: 36)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(track.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .foregroundColor(i == currentTrackIndex ? .primary : .secondary)
+
+                                Text(track.artist)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            if isSeed(track) {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.yellow)
+                            }
                         }
-                        if isSeed(track) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 7))
-                                .foregroundColor(.yellow)
-                        }
-                        Text(track.title)
-                            .font(.caption2)
-                            .lineLimit(1)
-                        Text(track.artist)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(i == currentTrackIndex ? Color.accentColor.opacity(0.12) : Color.clear)
+                        .cornerRadius(8)
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(i == currentTrackIndex ? Color.green.opacity(0.1) : Color.clear)
-                    .cornerRadius(2)
                 }
             }
+            .frame(minHeight: 80, maxHeight: 180)
         }
-        .frame(minHeight: 120, maxHeight: 200)
+    }
+
+    @ViewBuilder
+    private func thumbnail(for index: Int, track: Track) -> some View {
+        ZStack {
+            AlbumArt(url: thumbURL(for: track))
+
+            if index == currentTrackIndex {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.black.opacity(0.35))
+
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+            } else if isDownloading && !track.isDownloaded {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.black.opacity(0.35))
+
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            }
+        }
     }
 }

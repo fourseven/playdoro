@@ -44,6 +44,7 @@ class AudioPlayer: ObservableObject {
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
     private var eq: AudioEQ?
+    private var pendingEQPreset: EQPreset?
 
     private var audioFiles: [AVAudioFile] = []
     private var tracks: [Track] = []
@@ -52,6 +53,8 @@ class AudioPlayer: ObservableObject {
     private var hasHandledPlaylistEnd = false
     private var shouldStopAfterCurrentTrack = false
     private var progressTimer: Timer?
+    private var accumulatedPlayTime: TimeInterval = 0
+    private var lastTickTimestamp: Date?
 
     private let cache = TrackCache()
     private let session: URLSession = {
@@ -68,8 +71,12 @@ class AudioPlayer: ObservableObject {
     var remainingOnCurrentTrack: TimeInterval {
         guard currentTrackIndex < audioFiles.count else { return 0 }
         let duration = currentTrackDuration
-        let current = currentTrackTime
-        guard duration.isFinite, current.isFinite else { return 0 }
+        let current: TimeInterval
+        if let last = lastTickTimestamp {
+            current = accumulatedPlayTime + Date().timeIntervalSince(last)
+        } else {
+            current = accumulatedPlayTime
+        }
         return max(0, duration - current)
     }
 
@@ -183,6 +190,8 @@ class AudioPlayer: ObservableObject {
         audioFiles = []
         self.tracks = []
         currentTrackIndex = -1
+        accumulatedPlayTime = 0
+        lastTickTimestamp = nil
         return sessionID
     }
 
@@ -228,6 +237,9 @@ class AudioPlayer: ObservableObject {
 
         playerNode.volume = volume
 
+        if let preset = pendingEQPreset {
+            eq.apply(preset: preset)
+        }
         self.engine = engine
         self.playerNode = playerNode
         self.eq = eq
@@ -280,6 +292,8 @@ class AudioPlayer: ObservableObject {
             }
         } else {
             currentTrackIndex = index + 1
+            accumulatedPlayTime = 0
+            lastTickTimestamp = isPlaying ? Date() : nil
             onTrackFinished?()
         }
     }
@@ -325,8 +339,13 @@ class AudioPlayer: ObservableObject {
             return
         }
         fileLog("Pausing")
+        if let last = lastTickTimestamp {
+            accumulatedPlayTime += Date().timeIntervalSince(last)
+        }
+        lastTickTimestamp = nil
         playerNode.pause()
         isPlaying = false
+        refreshProgress()
     }
 
     func togglePlayPause() {
@@ -340,6 +359,7 @@ class AudioPlayer: ObservableObject {
             fileLog("Resuming")
             playerNode.play()
             isPlaying = true
+            lastTickTimestamp = Date()
         }
     }
 
@@ -356,7 +376,9 @@ class AudioPlayer: ObservableObject {
         audioFiles = []
         tracks = []
         currentTrackIndex = -1
+        accumulatedPlayTime = 0
         isPlaying = false
+        currentProgress = 0
         setIdleTimerDisabled(false)
         fileLog("STOP complete")
     }
@@ -364,12 +386,13 @@ class AudioPlayer: ObservableObject {
     // MARK: - EQ
 
     func applyEQ(preset: EQPreset) {
+        pendingEQPreset = preset
         eq?.apply(preset: preset)
         fileLog("Applied EQ preset: \(preset.name)")
     }
 
     var currentEQPreset: EQPreset {
-        eq?.currentPreset ?? .flat
+        eq?.currentPreset ?? pendingEQPreset ?? .flat
     }
 
     // MARK: - Progress
@@ -380,15 +403,10 @@ class AudioPlayer: ObservableObject {
         return Double(file.length) / file.processingFormat.sampleRate
     }
 
-    private var currentTrackTime: TimeInterval {
-        guard let playerNode = playerNode,
-              let lastRenderTime = playerNode.lastRenderTime,
-              let playerTime = playerNode.playerTime(forNodeTime: lastRenderTime) else { return 0 }
-        return Double(playerTime.sampleTime) / playerTime.sampleRate
-    }
-
     private func startProgressUpdates() {
         stopProgressUpdates()
+        accumulatedPlayTime = 0
+        lastTickTimestamp = Date()
         refreshProgress()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -400,16 +418,19 @@ class AudioPlayer: ObservableObject {
     private func stopProgressUpdates() {
         progressTimer?.invalidate()
         progressTimer = nil
-        currentProgress = 0
+        lastTickTimestamp = nil
     }
 
     private func refreshProgress() {
         let duration = currentTrackDuration
-        let current = currentTrackTime
-        guard duration.isFinite, current.isFinite, duration > 0 else {
+        guard duration > 0 else {
             currentProgress = 0
             return
         }
-        currentProgress = current / duration
+        if let last = lastTickTimestamp {
+            accumulatedPlayTime += Date().timeIntervalSince(last)
+            lastTickTimestamp = Date()
+        }
+        currentProgress = min(1.0, max(0, accumulatedPlayTime / duration))
     }
 }

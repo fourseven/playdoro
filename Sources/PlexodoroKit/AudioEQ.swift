@@ -54,35 +54,31 @@ extension EQPreset {
         preamp: -6.1
     )
 
-    /// Slightly emphasised low end for speakers/headphones that sound thin.
-    static let warm = EQPreset(
-        id: "warm",
-        name: "Warm",
+    /// Moondrop Space Travel (v1) correction from the AutoEQ project
+    /// (Kazi database — oratory1990 has not measured this set). 10-band fit
+    /// matches the AVAudioUnitEQ band count.
+    static let spaceTravel = EQPreset(
+        id: "space-travel",
+        name: "Space Travel",
         bands: [
-            EQBand(frequency: 120, gain: 3.5, q: 0.71, filterType: .lowShelf),
-            EQBand(frequency: 3000, gain: -1.5, q: 1.0, filterType: .parametric),
-            EQBand(frequency: 8000, gain: -2.0, q: 0.71, filterType: .highShelf)
+            EQBand(frequency: 105, gain: -4.2, q: 0.70, filterType: .lowShelf),
+            EQBand(frequency: 151, gain: -3.4, q: 0.51, filterType: .parametric),
+            EQBand(frequency: 7995, gain: 5.8, q: 0.24, filterType: .parametric),
+            EQBand(frequency: 59, gain: 4.9, q: 0.48, filterType: .parametric),
+            EQBand(frequency: 3749, gain: -6.2, q: 0.92, filterType: .parametric),
+            EQBand(frequency: 10000, gain: -5.7, q: 0.70, filterType: .highShelf),
+            EQBand(frequency: 8394, gain: 2.9, q: 3.66, filterType: .parametric),
+            EQBand(frequency: 5781, gain: 1.6, q: 6.00, filterType: .parametric),
+            EQBand(frequency: 6660, gain: -1.4, q: 6.00, filterType: .parametric),
+            EQBand(frequency: 3487, gain: 0.2, q: 3.77, filterType: .parametric)
         ],
-        preamp: -3.5
+        preamp: -5.6
     )
 
-    /// Brighter, more present upper-mids for detail.
-    static let bright = EQPreset(
-        id: "bright",
-        name: "Bright",
-        bands: [
-            EQBand(frequency: 80, gain: -2.0, q: 0.71, filterType: .lowShelf),
-            EQBand(frequency: 2500, gain: 2.0, q: 1.2, filterType: .parametric),
-            EQBand(frequency: 6000, gain: 1.5, q: 1.5, filterType: .parametric),
-            EQBand(frequency: 11000, gain: 2.5, q: 0.71, filterType: .highShelf)
-        ],
-        preamp: -4.0
-    )
+    static let all: [EQPreset] = [.flat, .hd6xx, .spaceTravel]
 
-    static let all: [EQPreset] = [.flat, .hd6xx, .warm, .bright]
-
-    /// Presets shown in the settings UI: Off (Flat) and HD 6XX.
-    static let settingsPresets: [EQPreset] = [.flat, .hd6xx]
+    /// Headphone correction profiles shown in the settings UI.
+    static let settingsPresets: [EQPreset] = [.flat, .hd6xx, .spaceTravel]
 }
 
 /// Manages the AVAudioUnitEQ node and applies presets.

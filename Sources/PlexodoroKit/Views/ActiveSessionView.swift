@@ -30,17 +30,52 @@ struct ActiveSessionView: View {
                 }
             }
 
-            VStack(spacing: 0) {
-                sessionContent
-                    .padding(.horizontal, 20)
-                upNextBar
-            }
+            content
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
         .animation(.easeInOut(duration: 0.4), value: palette)
     }
+
+    // iOS fills the screen (Spacers + docked up-next bar); macOS sizes a
+    // compact menu-bar popover, so the layout hugs its content.
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        macContent
+        #else
+        VStack(spacing: 0) {
+            sessionContent
+                .padding(.horizontal, 20)
+            upNextBar
+        }
+        #endif
+    }
+
+    #if os(macOS)
+    private var macContent: some View {
+        VStack(spacing: 14) {
+            albumHero
+            timerBlock
+            trackInfo
+            transportRow
+            volumeRow
+
+            if appState.state == .finished {
+                Text("Pomodoro complete")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(accentColor)
+                    .transition(.opacity)
+            }
+
+            bottomBar
+            upNextBar
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+    #endif
 
     private var sessionContent: some View {
         VStack(spacing: 18) {
@@ -89,7 +124,13 @@ struct ActiveSessionView: View {
     private var albumHero: some View {
         AlbumArt(url: currentThumbURL)
             .aspectRatio(1, contentMode: .fit)
+            // macOS VStack offers the ideal (nil) height, so a max-only frame
+            // collapses the size-less resizable image to zero — pin it definite.
+            #if os(macOS)
+            .frame(width: 150, height: 150)
+            #else
             .frame(maxWidth: 240, maxHeight: 240)
+            #endif
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: .black.opacity(0.5), radius: 24, x: 0, y: 12)
             .overlay(

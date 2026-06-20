@@ -47,9 +47,17 @@ struct PlaylistView: View {
             peek
         }
         .buttonStyle(.plain)
+        #if os(iOS)
         .sheet(isPresented: $showQueue) {
             queueSheet
         }
+        #else
+        .popover(isPresented: $showQueue, arrowEdge: .top) {
+            queueSheet
+                .frame(width: 320, height: 420)
+                .background(Theme.background)
+        }
+        #endif
     }
 
     private var peek: some View {
@@ -85,21 +93,45 @@ struct PlaylistView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .background(alignment: .top) {
-            dockShape
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea(edges: .bottom)
-        }
-        .overlay(alignment: .top) {
-            dockShape
-                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-                .ignoresSafeArea(edges: .bottom)
-        }
+        .background(alignment: .top) { peekBackground }
+        .overlay(alignment: .top) { peekBorder }
+    }
+
+    // iOS: a full-width dock flush to the bottom safe area. macOS sits in a
+    // popover with no safe area, so it's a self-contained rounded pill.
+    #if os(iOS)
+    @ViewBuilder
+    private var peekBackground: some View {
+        dockShape
+            .fill(.ultraThinMaterial)
+            .ignoresSafeArea(edges: .bottom)
+    }
+
+    @ViewBuilder
+    private var peekBorder: some View {
+        dockShape
+            .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+            .ignoresSafeArea(edges: .bottom)
     }
 
     private var dockShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
     }
+    #else
+    private var pillShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+    }
+
+    @ViewBuilder
+    private var peekBackground: some View {
+        pillShape.fill(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private var peekBorder: some View {
+        pillShape.strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+    }
+    #endif
 
     private var queueSheet: some View {
         QueueSheet(

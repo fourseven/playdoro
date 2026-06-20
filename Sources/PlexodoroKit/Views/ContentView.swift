@@ -31,40 +31,49 @@ struct ContentView: View {
 
     #if os(macOS)
     private var macBody: some View {
-        VStack(spacing: 12) {
+        // No outer padding: the immersive idle/active screens bleed to the
+        // popover edges. Chrome (settings, connect, footer) pads itself.
+        VStack(spacing: 0) {
             if showSettings {
                 settingsContent
+                    .padding()
             } else {
                 mainContent
             }
 
             Divider()
 
-            if showSettings {
-                Button("Done") {
-                    showSettings = false
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
-                HStack(spacing: 12) {
-                    Button("Settings…") {
-                        showSettings = true
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
+            macFooter
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+        }
+        .frame(width: 300)
+    }
 
-                    Spacer()
-
-                    Button("Quit") {
-                        NSApplication.shared.terminate(nil)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
+    @ViewBuilder
+    private var macFooter: some View {
+        if showSettings {
+            Button("Done") {
+                showSettings = false
+            }
+            .buttonStyle(.borderedProminent)
+        } else {
+            HStack(spacing: 12) {
+                Button("Settings…") {
+                    showSettings = true
                 }
+                .buttonStyle(.plain)
+                .font(.caption)
+
+                Spacer()
+
+                Button("Quit") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
             }
         }
-        .padding()
-        .frame(width: 300)
     }
     #endif
 
@@ -101,8 +110,17 @@ struct ContentView: View {
     private var mainContent: some View {
         if !appState.isConfigured {
             connectionContent
+            #if os(macOS)
+                .padding()
+            #endif
         } else if appState.state == .idle {
+            // idleView is a backdrop + ScrollView, both height-greedy with no
+            // intrinsic height. iOS gets full-screen; the macOS menu-bar popover
+            // has no defined height, so bound it or the view collapses to a sliver.
             idleView
+            #if os(macOS)
+                .frame(width: 300, height: 520)
+            #endif
         } else {
             activeView
         }

@@ -1,9 +1,6 @@
 #if canImport(UIKit)
-import Logging
 import MediaPlayer
 import UIKit
-
-private let log = Logger(label: "com.plexodoro.nowplaying")
 
 /// Drives the iOS lock-screen / Control Center "Now Playing" card:
 /// `MPNowPlayingInfoCenter` for metadata + artwork, `MPRemoteCommandCenter`
@@ -67,22 +64,21 @@ final class NowPlayingCenter {
         artworkURLKey = url.absoluteString
         artworkTask?.cancel()
         artworkTask = Task { [weak self] in
-            log.info("artwork: fetching \(url.absoluteString)")
             guard let data = await loadAlbumArtData(from: url),
                   let image = UIImage(data: data),
-                  !Task.isCancelled else {
-                log.info("artwork: no image (cancelled or decode failed)")
-                return
-            }
-            log.info("artwork: decoded image size \(image.size.width)x\(image.size.height), main=\(Thread.isMainThread)")
-            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-            log.info("artwork: created MPMediaItemArtwork, setting info")
+                  !Task.isCancelled else { return }
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-            info[MPMediaItemPropertyArtwork] = artwork
+            info[MPMediaItemPropertyArtwork] = Self.makeArtwork(image)
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-            log.info("artwork: info set")
             self?.artworkTask = nil
         }
+    }
+
+    /// Builds the artwork in a non-isolated context so its `requestHandler`
+    /// isn't main-actor-isolated — MediaPlayer invokes it on a background queue
+    /// to render the art, which traps if the closure expects the main actor.
+    private nonisolated static func makeArtwork(_ image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }
 }
 #endif

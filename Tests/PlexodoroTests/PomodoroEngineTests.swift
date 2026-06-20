@@ -268,7 +268,7 @@ final class ErrorDescriptionTests: XCTestCase {
     func testAllCasesReturnNonEmptyDescription() {
         let cases: [PlexodoroError] = [
             .serverUnreachable,
-            .noCurrentTrack,
+            .trackUnavailable,
             .noSonicAnalysis,
             .noAudioURL,
             .playbackFailed,

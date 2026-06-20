@@ -68,11 +68,6 @@ func mergeSavedPlaylists(existing: [SeedPlaylist], added: SeedPlaylist, maxRetai
     return ([added] + filtered).prefix(maxRetained).map { $0 }
 }
 
-struct PlexSession {
-    let track: Track
-    let state: String
-}
-
 enum PomodoroState: Equatable {
     case idle
     case running
@@ -89,7 +84,7 @@ struct PomodoroConfig {
 
 enum PlexodoroError: LocalizedError {
     case serverUnreachable
-    case noCurrentTrack
+    case trackUnavailable
     case noSonicAnalysis
     case noAudioURL
     case playbackFailed
@@ -100,7 +95,7 @@ enum PlexodoroError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .serverUnreachable: "Cannot reach Plex server"
-        case .noCurrentTrack: "No track is currently playing"
+        case .trackUnavailable: "Could not load one of the selected tracks"
         case .noSonicAnalysis: "Sonic analysis is not enabled on your library"
         case .noAudioURL: "Could not get audio stream URL for tracks"
         case .playbackFailed: "Failed to start audio playback"
@@ -140,13 +135,12 @@ struct PlexTrackJSON: Decodable {
     let thumb: String?
     let distance: Double?
     let type: String?
-    let player: PlexPlayerJSON?
     let librarySectionID: Int?
     let media: [PlexMediaJSON]?
 
     enum CodingKeys: String, CodingKey {
         case ratingKey, title, grandparentTitle, parentTitle, duration
-        case thumb, distance, type, player, librarySectionID
+        case thumb, distance, type, librarySectionID
         case media = "Media"
     }
 
@@ -174,10 +168,6 @@ struct PlexMediaJSON: Decodable {
 
 struct PlexPartJSON: Decodable {
     let key: String?
-}
-
-struct PlexPlayerJSON: Decodable {
-    let state: String
 }
 
 // MARK: - OAuth Models

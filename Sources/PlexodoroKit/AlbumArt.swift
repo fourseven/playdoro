@@ -23,6 +23,29 @@ private let cacheDirectory: URL = {
 
 private let cacheLimit = 50 * 1024 * 1024
 
+/// Fetch album-art bytes for `url`, using the on-disk cache and the
+/// self-signed-cert-trusting session. Shared by `AlbumArt` (SwiftUI) and the
+/// iOS Now Playing centre.
+func loadAlbumArtData(from url: URL) async -> Data? {
+    let cached = cachePath(for: url)
+    if FileManager.default.fileExists(atPath: cached.path) {
+        return try? Data(contentsOf: cached)
+    }
+    do {
+        let (data, response) = try await session.data(from: url)
+        guard response is HTTPURLResponse else {
+            log.error("Non-HTTP response for \(url.absoluteString)")
+            return nil
+        }
+        try? data.write(to: cached)
+        evictIfNeeded()
+        return data
+    } catch {
+        log.error("Failed to download \(url.absoluteString): \(error.localizedDescription)")
+        return nil
+    }
+}
+
 private func cachePath(for url: URL) -> URL {
     let key = url.absoluteString
         .replacingOccurrences(of: "/", with: "_")
@@ -116,26 +139,6 @@ struct AlbumArt: View {
 
     private func loadImage() async {
         guard let url = url, imageData == nil else { return }
-        let cached = cachePath(for: url)
-        if FileManager.default.fileExists(atPath: cached.path) {
-            imageData = try? Data(contentsOf: cached)
-            log.info("Cache hit: \(cached.lastPathComponent) (\(imageData?.count ?? 0) bytes)")
-            return
-        }
-        log.info("Cache miss, fetching: \(url.absoluteString)")
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                log.error("Non-HTTP response for \(url.absoluteString)")
-                return
-            }
-            log.info("Downloaded \(data.count) bytes (HTTP \(httpResponse.statusCode))")
-            imageData = data
-            try data.write(to: cached)
-            log.info("Cached to \(cached.lastPathComponent)")
-            evictIfNeeded()
-        } catch {
-            log.error("Failed to download \(url.absoluteString): \(error.localizedDescription)")
-        }
+        imageData = await loadAlbumArtData(from: url)
     }
 }

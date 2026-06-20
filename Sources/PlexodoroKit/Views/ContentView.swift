@@ -199,24 +199,6 @@ struct ContentView: View {
                         accentColor: idlePalette?.primary ?? Theme.accent
                     )
 
-                    if appState.seedTracks.isEmpty {
-                        Button {
-                            appState.startPomodoro()
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "play.fill")
-                                Text("Start from current track")
-                                    .font(.headline)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .foregroundStyle(.white)
-                            .background(idleAccentGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: (idlePalette?.primary ?? Theme.accent).opacity(0.35), radius: 14, x: 0, y: 6)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
                     if let error = appState.errorMessage {
                         Text(error)
                             .font(.caption)

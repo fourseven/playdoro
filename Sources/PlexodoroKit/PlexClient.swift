@@ -127,20 +127,6 @@ actor PlexClient: MusicProvider {
         return (container.metadata ?? []).map { $0.toTrack }
     }
 
-    func getCurrentTrack() async throws -> Track? {
-        try await getSessions()?.track
-    }
-
-    func getSessions() async throws -> PlexSession? {
-        let data = try await fetchJSON(path: "/status/sessions")
-        let container = try decodeContainer(from: data)
-        guard let track = container.metadata?.first else { return nil }
-        return PlexSession(
-            track: track.toTrack,
-            state: track.player?.state ?? "stopped"
-        )
-    }
-
     func getNearest(trackId: String, limit: Int = 50) async throws -> [Track] {
         let data = try await fetchJSON(
             path: "/library/metadata/\(trackId)/nearest",

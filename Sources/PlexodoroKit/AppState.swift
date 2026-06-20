@@ -27,6 +27,9 @@ class AppState: ObservableObject {
 
     var player = AudioPlayer()
     var client: (any MusicProvider)?
+    #if canImport(UIKit)
+    private let nowPlaying = NowPlayingCenter()
+    #endif
     private let authManager = PlexAuthManager()
     private var timerSubscription: AnyCancellable?
     private var startTimerCancellable: AnyCancellable?
@@ -55,6 +58,14 @@ class AppState: ObservableObject {
             .map { !$0 }
             .assign(to: \.isTimerPaused, on: self)
             .store(in: &cancellables)
+
+        #if canImport(UIKit)
+        nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayback() }
+        nowPlaying.setupRemoteCommands()
+        player.$isPlaying
+            .sink { [weak self] _ in self?.updateNowPlaying() }
+            .store(in: &cancellables)
+        #endif
     }
 
     // MARK: - OAuth Flow
@@ -201,10 +212,6 @@ class AppState: ObservableObject {
 
     // MARK: - Pomodoro
 
-    func startPomodoro() {
-        startPomodoro(seedTracks: [])
-    }
-
     func startPomodoro(seedTracks: [Track]) {
         guard state == .idle else { return }
         guard let client = client else {
@@ -339,28 +346,45 @@ class AppState: ObservableObject {
         currentTrackIndex = nextIndex
         let track = playlistTracks[nextIndex]
         currentTrackTitle = "\(track.artist) — \(track.title)"
+        #if canImport(UIKit)
+        updateNowPlaying()
+        #endif
     }
 
+    #if canImport(UIKit)
+    private func updateNowPlaying() {
+        guard state == .running, playlistTracks.indices.contains(currentTrackIndex) else {
+            nowPlaying.clear()
+            return
+        }
+        let track = playlistTracks[currentTrackIndex]
+        let durationSeconds = track.duration / 1000
+        nowPlaying.update(
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            durationSeconds: durationSeconds,
+            elapsedSeconds: durationSeconds * player.currentProgress,
+            isPlaying: player.isPlaying,
+            artworkURL: client?.thumbURL(for: track)
+        )
+    }
+    #endif
+
     private func resolveSeedTracks(seedTracks: [Track], client: any MusicProvider) async throws -> [Track] {
-        if !seedTracks.isEmpty {
-            return try await withThrowingTaskGroup(of: Track.self) { group in
-                for seed in seedTracks {
-                    group.addTask {
-                        guard let track = try await client.getTrack(id: seed.id) else {
-                            throw PlexodoroError.noCurrentTrack
-                        }
-                        return track
+        try await withThrowingTaskGroup(of: Track.self) { group in
+            for seed in seedTracks {
+                group.addTask {
+                    guard let track = try await client.getTrack(id: seed.id) else {
+                        throw PlexodoroError.trackUnavailable
                     }
+                    return track
                 }
-                var resolved: [Track] = []
-                for try await track in group { resolved.append(track) }
-                return resolved
             }
+            var resolved: [Track] = []
+            for try await track in group { resolved.append(track) }
+            return resolved
         }
-        guard let track = try await client.getCurrentTrack() else {
-            throw PlexodoroError.noCurrentTrack
-        }
-        return [track]
     }
 
     private func preparePackedTracks(seedTracks: [Track], client: any MusicProvider) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
@@ -441,6 +465,9 @@ class AppState: ObservableObject {
 
     private func resetState() {
         state = .idle
+        #if canImport(UIKit)
+        nowPlaying.clear()
+        #endif
         timeRemaining = 25 * 60
         currentTrackTitle = ""
         playlistTracks = []

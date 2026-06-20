@@ -5,7 +5,6 @@ protocol MusicProvider: Sendable {
     func searchTracks(query: String, limit: Int) async throws -> [Track]
     func getTrack(id: String) async throws -> Track?
     func getNearest(trackId: String, limit: Int) async throws -> [Track]
-    func getCurrentTrack() async throws -> Track?
     func streamURL(for track: Track) -> URL?
     func thumbURL(for track: Track) -> URL?
 }

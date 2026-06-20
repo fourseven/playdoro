@@ -30,39 +30,38 @@ struct PlaylistView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
                 Image(systemName: "list.bullet")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
                 Text("Up next")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.caption.weight(.medium))
+                    .textCase(.uppercase)
+                    .tracking(1)
                 Spacer()
                 Text("\(tracks.count) tracks")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
+                    .font(.caption2.monospacedDigit())
             }
+            .foregroundStyle(.white.opacity(0.55))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, track in
-                        HStack(spacing: 8) {
+                        HStack(spacing: 12) {
                             thumbnail(for: i, track: track)
-                                .frame(width: 36, height: 36)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(track.title)
-                                    .font(.caption)
+                                    .font(.subheadline.weight(i == currentTrackIndex ? .semibold : .regular))
                                     .lineLimit(1)
-                                    .foregroundColor(i == currentTrackIndex ? .primary : .secondary)
+                                    .foregroundStyle(i == currentTrackIndex ? .white : .white.opacity(0.75))
 
                                 Text(track.artist)
                                     .font(.caption2)
                                     .lineLimit(1)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.white.opacity(0.5))
                             }
 
                             Spacer()
@@ -70,18 +69,28 @@ struct PlaylistView: View {
                             if isSeed(track) {
                                 Image(systemName: "star.fill")
                                     .font(.caption2)
-                                    .foregroundColor(.yellow)
+                                    .foregroundStyle(.yellow)
                             }
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(i == currentTrackIndex ? Color.accentColor.opacity(0.12) : Color.clear)
-                        .cornerRadius(8)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            i == currentTrackIndex
+                                ? Theme.accent.opacity(0.18)
+                                : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
                     }
                 }
             }
-            .frame(minHeight: 80, maxHeight: 180)
+            .frame(minHeight: 80, maxHeight: 200)
         }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+        )
     }
 
     @ViewBuilder
@@ -90,19 +99,19 @@ struct PlaylistView: View {
             AlbumArt(url: thumbURL(for: track))
 
             if index == currentTrackIndex {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.black.opacity(0.35))
 
                 Image(systemName: "play.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
             } else if isDownloading && !track.isDownloaded {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.black.opacity(0.35))
 
                 ProgressView()
                     .scaleEffect(0.6)
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .tint(.white)
             }
         }
     }

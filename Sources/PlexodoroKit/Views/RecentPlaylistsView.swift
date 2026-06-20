@@ -12,18 +12,20 @@ struct RecentPlaylistsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.white.opacity(0.55))
                 Text("Recent")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.caption.weight(.medium))
+                    .textCase(.uppercase)
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.55))
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     ForEach(playlists) { playlist in
                         Button {
                             onTap(playlist)
@@ -38,30 +40,40 @@ struct RecentPlaylistsView: View {
     }
 
     private func card(for playlist: SeedPlaylist) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: -8) {
-                ForEach(playlist.seeds.prefix(3)) { track in
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: -10) {
+                ForEach(Array(playlist.seeds.prefix(3).enumerated()), id: \.element.id) { i, track in
                     AlbumArt(url: thumbURL(for: track))
-                        .frame(width: 26, height: 26)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .frame(width: 36, height: 36)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(Theme.background, lineWidth: 1.5)
+                        )
+                        .zIndex(Double(3 - i))
                 }
             }
-            .frame(height: 26, alignment: .leading)
+            .frame(height: 36, alignment: .leading)
 
-            Text(playlist.seeds.first?.title ?? "Untitled")
-                .font(.caption2)
-                .lineLimit(1)
-                .frame(maxWidth: 110, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(playlist.seeds.first?.title ?? "Untitled")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
 
-            Text(playlist.seeds.count == 1
-                 ? "1 seed"
-                 : "\(playlist.seeds.count) seeds")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                Text(playlist.seeds.count == 1
+                     ? "1 seed"
+                     : "\(playlist.seeds.count) seeds")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
         }
-        .padding(6)
-        .frame(width: 122)
-        .background(Color(.systemFill))
-        .cornerRadius(6)
+        .padding(10)
+        .frame(width: 148)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+        )
     }
 }

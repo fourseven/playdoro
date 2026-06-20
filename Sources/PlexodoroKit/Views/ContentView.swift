@@ -59,13 +59,18 @@ struct ContentView: View {
     #if os(iOS)
     private var iosBody: some View {
         mainContent
+            .tint(Theme.accent)
+            .preferredColorScheme(.dark)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
+                            .foregroundStyle(.white.opacity(0.85))
                     }
                 }
             }
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 NavigationStack {
                     settingsContent
@@ -75,6 +80,7 @@ struct ContentView: View {
                             }
                         }
                 }
+                .preferredColorScheme(.dark)
             }
     }
     #endif
@@ -117,59 +123,99 @@ struct ContentView: View {
     }
 
     private var idleView: some View {
-        VStack(spacing: 10) {
-            if !appState.savedPlaylists.isEmpty {
-                RecentPlaylistsView(
-                    playlists: appState.savedPlaylists,
-                    serverURL: appState.serverURL,
-                    token: appState.token,
-                    onTap: { playlist in
-                        appState.startPomodoro(savedPlaylist: playlist)
+        ZStack {
+            AlbumArtBackdrop(url: idleBackdropURL)
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    headerBlock
+                        .padding(.top, 24)
+
+                    if !appState.savedPlaylists.isEmpty {
+                        RecentPlaylistsView(
+                            playlists: appState.savedPlaylists,
+                            serverURL: appState.serverURL,
+                            token: appState.token,
+                            onTap: { playlist in
+                                appState.startPomodoro(savedPlaylist: playlist)
+                            }
+                        )
                     }
-                )
-            }
 
-            SearchBar(
-                searchText: $searchText,
-                isSearching: isSearching,
-                searchResults: searchResults,
-                searchError: searchError,
-                serverURL: appState.serverURL,
-                token: appState.token,
-                selectedSeeds: appState.seedTracks,
-                maxSeeds: PomodoroLimits.maxSeeds,
-                onSearch: searchDebounce,
-                onAdd: { track in
-                    appState.addSeed(track)
-                    searchText = ""
-                    searchResults = []
-                },
-                onRemove: appState.removeSeed,
-                onStart: { seeds in
-                    appState.startPomodoro(seedTracks: seeds)
+                    SearchBar(
+                        searchText: $searchText,
+                        isSearching: isSearching,
+                        searchResults: searchResults,
+                        searchError: searchError,
+                        serverURL: appState.serverURL,
+                        token: appState.token,
+                        selectedSeeds: appState.seedTracks,
+                        maxSeeds: PomodoroLimits.maxSeeds,
+                        onSearch: searchDebounce,
+                        onAdd: { track in
+                            appState.addSeed(track)
+                            searchText = ""
+                            searchResults = []
+                        },
+                        onRemove: appState.removeSeed,
+                        onStart: { seeds in
+                            appState.startPomodoro(seedTracks: seeds)
+                        }
+                    )
+
+                    if appState.seedTracks.isEmpty {
+                        Button {
+                            appState.startPomodoro()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "play.fill")
+                                Text("Start from current track")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .foregroundStyle(.white)
+                            .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: Theme.accent.opacity(0.35), radius: 14, x: 0, y: 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if let error = appState.errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
                 }
-            )
-
-            if appState.seedTracks.isEmpty {
-                Divider()
-
-                Button {
-                    appState.startPomodoro()
-                } label: {
-                    Label("Start from current track", systemImage: "play.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
             }
-
-            if let error = appState.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-            }
+            .scrollIndicators(.hidden)
         }
+    }
+
+    private var headerBlock: some View {
+        VStack(spacing: 6) {
+            Text("Plexodoro")
+                .font(Theme.titleFont)
+                .foregroundStyle(.white)
+            Text("Focus with your library")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
+    }
+
+    private var idleBackdropURL: URL? {
+        if let playlist = appState.savedPlaylists.first,
+           let seed = playlist.seeds.first,
+           let thumb = seed.thumb {
+            return URL(string: "\(appState.serverURL)\(thumb)?X-Plex-Token=\(appState.token)")
+        }
+        return nil
     }
 
     private var activeView: some View {

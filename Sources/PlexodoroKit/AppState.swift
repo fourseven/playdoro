@@ -113,15 +113,20 @@ class AppState: ObservableObject {
             guard !isConfigured else { return }
             let savedURL = self.serverURL
             if !savedURL.isEmpty {
-                let testClient = PlexClient(serverURL: savedURL, token: token)
-                do {
-                    try await testClient.ping()
-                    client = testClient
-                    isConfigured = true
-                    connectionState = .connected
-                    errorMessage = nil
-                    return
-                } catch {
+                let ok = await PlexClient.probe(serverURL: savedURL, token: token, timeout: 2.0)
+                if ok {
+                    let testClient = PlexClient(serverURL: savedURL, token: token)
+                    do {
+                        try await testClient.ping()
+                        client = testClient
+                        isConfigured = true
+                        connectionState = .connected
+                        errorMessage = nil
+                        return
+                    } catch {
+                        log.info("Saved URL \(savedURL) probe ok but full ping failed, rediscovering…")
+                    }
+                } else {
                     log.info("Saved URL \(savedURL) unreachable, rediscovering…")
                 }
             }
@@ -144,28 +149,54 @@ class AppState: ObservableObject {
         }
     }
 
-    /// Try each URI until one responds. Exits early if already configured.
+    /// Race all URIs in parallel; first probe to win takes it. Then build a real
+    /// client and confirm with a full ping. Much faster than sequential probing
+    /// when several candidate URIs are unreachable.
     private func connectToServer(uris: [String], token: String) async throws {
-        var lastError: Error = PlexodoroError.serverUnreachable
-
-        for uri in uris {
-            if isConfigured { log.info("Already connected, skipping remaining retries"); return }
-            log.info("Trying \(uri)…")
-            let testClient = PlexClient(serverURL: uri, token: token)
-            do {
-                try await testClient.ping()
-                log.info("Connected at \(uri)")
-                serverURL = uri
-                UserDefaults.standard.set(uri, forKey: UserDefaultsKey.serverURL)
-                client = testClient
-                return
-            } catch {
-                log.warning("  \(uri) failed: \(error.localizedDescription)")
-                lastError = error
-            }
+        if isConfigured {
+            log.info("Already connected, skipping scan")
+            return
         }
 
-        throw lastError
+        log.info("Racing \(uris.count) candidate URIs in parallel…")
+        guard let uri = await raceProbe(uris: uris, token: token) else {
+            log.error("All \(uris.count) candidate URIs failed probe")
+            throw PlexodoroError.serverUnreachable
+        }
+
+        log.info("Probe won at \(uri) — confirming with full ping")
+        let testClient = PlexClient(serverURL: uri, token: token)
+        do {
+            try await testClient.ping()
+        } catch {
+            log.error("Probe-winner \(uri) failed full ping: \(error.localizedDescription)")
+            throw error
+        }
+
+        serverURL = uri
+        UserDefaults.standard.set(uri, forKey: UserDefaultsKey.serverURL)
+        client = testClient
+    }
+
+    /// Race probe calls against all URIs. Returns the first URI that responds 2xx
+    /// within `timeout`, cancelling the rest. nil if none succeed.
+    private func raceProbe(uris: [String], token: String, timeout: TimeInterval = 2.0) async -> String? {
+        await withTaskGroup(of: (uri: String, ok: Bool)?.self) { group in
+            for uri in uris {
+                group.addTask {
+                    let ok = await PlexClient.probe(serverURL: uri, token: token, timeout: timeout)
+                    return (uri: uri, ok: ok)
+                }
+            }
+            var winner: String?
+            for await result in group {
+                if result?.ok == true && winner == nil {
+                    winner = result?.uri
+                    group.cancelAll()
+                }
+            }
+            return winner
+        }
     }
 
     // MARK: - Pomodoro

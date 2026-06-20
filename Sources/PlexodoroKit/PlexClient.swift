@@ -21,6 +21,33 @@ actor PlexClient: MusicProvider {
 
     deinit { session.invalidateAndCancel() }
 
+    /// Quick reachability probe with a short timeout. Returns true if the server
+    /// responds 2xx to `/`. Uses a throwaway URLSession so it does not interfere
+    /// with any real client session. Safe to fire many concurrently.
+    static func probe(serverURL: String, token: String, timeout: TimeInterval) async -> Bool {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForResource = timeout
+        let probeSession = URLSession(configuration: config, delegate: CertDelegate(), delegateQueue: nil)
+        defer { probeSession.finishTasksAndInvalidate() }
+
+        guard let url = URL(string: "\(serverURL)/?X-Plex-Token=\(token)") else { return false }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = timeout
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Client-Identifier")
+
+        return await withCheckedContinuation { continuation in
+            probeSession.dataTask(with: req) { _, response, _ in
+                if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                    continuation.resume(returning: true)
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }.resume()
+        }
+    }
+
     func url(path: String, query: [URLQueryItem] = []) -> URL {
         var components = URLComponents(string: "\(serverURL)\(path)")!
         var items = query.map { URLQueryItem(name: $0.name, value: percentEncode($0.value ?? "")) }

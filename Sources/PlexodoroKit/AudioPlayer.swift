@@ -56,6 +56,11 @@ class AudioPlayer: ObservableObject {
     private var accumulatedPlayTime: TimeInterval = 0
     private var lastTickTimestamp: Date?
 
+    // Interruption / config-change handling for screen-lock & sleep wakeups.
+    private var interruptionObserver: NSObjectProtocol?
+    private var configChangeObserver: NSObjectProtocol?
+    private var wasPlayingBeforeInterruption = false
+
     private let cache = TrackCache()
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -68,6 +73,10 @@ class AudioPlayer: ObservableObject {
     var onStoppedAtTrackEnd: (() -> Void)?
     var onTrackDownloaded: ((Track) -> Void)?
 
+    init() {
+        setupNotifications()
+    }
+
     var remainingOnCurrentTrack: TimeInterval {
         guard currentTrackIndex < audioFiles.count else { return 0 }
         let duration = currentTrackDuration
@@ -78,6 +87,178 @@ class AudioPlayer: ObservableObject {
             current = accumulatedPlayTime
         }
         return max(0, duration - current)
+    }
+
+    // MARK: - Interruption Handling
+
+    private func setupNotifications() {
+        #if canImport(UIKit)
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            // Extract Sendable bits on the main queue, then hop to the main
+            // actor. Notification itself isn't Sendable, so we don't capture
+            // it across the actor boundary.
+            guard let userInfo = note.userInfo,
+                  let typeRaw = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else { return }
+            let optionsRaw = (userInfo[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
+            Task { @MainActor in
+                self?.handleAudioSessionInterruption(type: type, optionsRaw: optionsRaw)
+            }
+        }
+        #endif
+
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // The engine reference isn't Sendable; just signal the change
+            // and let the handler inspect the (single) owned engine.
+            Task { @MainActor in
+                self?.handleEngineConfigurationChange()
+            }
+        }
+    }
+
+    #if canImport(UIKit)
+    private func handleAudioSessionInterruption(type: AVAudioSession.InterruptionType, optionsRaw: UInt) {
+        switch type {
+        case .began:
+            fileLog("Audio session interruption began")
+            wasPlayingBeforeInterruption = isPlaying
+            if isPlaying {
+                // System already halted audio. Sync state without treating
+                // this as a user pause — don't fold stale elapsed time into
+                // accumulatedPlayTime since we don't know how far it got.
+                lastTickTimestamp = nil
+                playerNode?.pause()
+                isPlaying = false
+                stopProgressUpdates()
+            }
+        case .ended:
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
+            let shouldResume = options.contains(.shouldResume)
+            fileLog("Audio session interruption ended, shouldResume=\(shouldResume), wasPlaying=\(wasPlayingBeforeInterruption)")
+            if wasPlayingBeforeInterruption, shouldResume {
+                configureAudioSession()
+                resumePlaybackAfterInterruption()
+            }
+            wasPlayingBeforeInterruption = false
+        @unknown default:
+            break
+        }
+    }
+    #endif
+
+    private func handleEngineConfigurationChange() {
+        guard let engine = engine else { return }
+        fileLog("AVAudioEngine configuration change — isRunning=\(engine.isRunning)")
+        // Fires on output device swap (macOS), sleep/wake, and audio
+        // session route changes (iOS). The eqNode -> mainMixerNode
+        // connection was set up against the previous device; after a
+        // swap it can go silent even when the sample rate looks
+        // unchanged. Reconnect with the mixer's current output format,
+        // then reschedule from the saved position.
+        //
+        // engine.stop() flushes the playerNode's pending scheduleFile
+        // completion handlers — they fire on the main actor and would
+        // cascade through trackDidFinish(), ending the playlist. To
+        // survive that, bump playSessionID first so the stale handlers
+        // are filtered out by the session check in trackDidFinish().
+        // resumePlaybackAfterInterruption() re-schedules under the new
+        // session ID.
+        guard lastTickTimestamp != nil, currentTrackIndex >= 0 else { return }
+        // Don't accumulate during the outage — audio wasn't progressing.
+        lastTickTimestamp = nil
+        playSessionID = UUID()
+        engine.stop()
+        reconnectEQToOutput()
+        resumePlaybackAfterInterruption()
+    }
+
+    /// Re-establish the EQ -> mainMixerNode connection. After an output
+    /// device swap the existing connection can go silent even when the
+    /// sample rate looks unchanged. We reconnect using the current
+    /// audio file's processing format (the same format used in
+    /// setupEngine), NOT the device's output format — AVAudioUnitEQ
+    /// does not resample, so its input and output formats must match.
+    /// The mainMixerNode handles conversion to the active device.
+    private func reconnectEQToOutput() {
+        guard let engine = engine, let eq = eq else { return }
+        guard currentTrackIndex >= 0, currentTrackIndex < audioFiles.count else {
+            fileLog("reconnectEQToOutput: no current audio file, skipping")
+            return
+        }
+        let format = audioFiles[currentTrackIndex].processingFormat
+        guard format.sampleRate > 0 else {
+            fileErr("File format invalid — skipping reconnect")
+            return
+        }
+        fileLog("Reconnecting EQ to mainMixerNode at \(format.sampleRate) Hz (file format)")
+        engine.disconnectNodeOutput(eq.eqNode, bus: 0)
+        engine.connect(eq.eqNode, to: engine.mainMixerNode, format: format)
+    }
+
+    /// Restart the engine (if stopped) and reschedule the current track from
+    /// `accumulatedPlayTime`. Called after interruptions, engine config
+    /// changes, or when the user presses play against a stopped engine
+    /// (e.g. after the screen locked). Scheduled segments are cleared when
+    /// the engine stops, so a plain `play()` would otherwise be silent.
+    private func resumePlaybackAfterInterruption() {
+        guard let engine = engine, let playerNode = playerNode else {
+            fileErr("resumePlaybackAfterInterruption: no engine/player")
+            return
+        }
+        guard currentTrackIndex >= 0, currentTrackIndex < audioFiles.count else {
+            fileErr("resumePlaybackAfterInterruption: no current track")
+            return
+        }
+
+        let file = audioFiles[currentTrackIndex]
+        let sampleRate = file.processingFormat.sampleRate
+        let startFrame = AVAudioFramePosition(accumulatedPlayTime * sampleRate)
+        let remainingFrames = AVAudioFrameCount(max(0, Int64(file.length) - Int64(startFrame)))
+        guard remainingFrames > 0 else {
+            fileLog("Resume: track \(currentTrackIndex) already finished, advancing")
+            trackDidFinish(index: currentTrackIndex, sessionID: playSessionID)
+            return
+        }
+
+        if !engine.isRunning {
+            do {
+                try engine.start()
+                fileLog("Engine restarted after stop")
+            } catch {
+                fileErr("Failed to restart engine: \(error.localizedDescription)")
+                return
+            }
+        }
+
+        let sessionID = playSessionID
+        let index = currentTrackIndex
+        playerNode.scheduleSegment(file, startingFrame: startFrame, frameCount: remainingFrames, at: nil) { [weak self] in
+            Task { @MainActor in
+                self?.trackDidFinish(index: index, sessionID: sessionID)
+            }
+        }
+        playerNode.play()
+        isPlaying = true
+        resumeProgressUpdates()
+        fileLog("Resumed at \(accumulatedPlayTime)s into track \(index), \(remainingFrames) frames remaining")
+    }
+
+    private func resumeProgressUpdates() {
+        stopProgressUpdates()
+        lastTickTimestamp = Date()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshProgress()
+            }
+        }
     }
 
     // MARK: - Download Stream
@@ -357,6 +538,14 @@ class AudioPlayer: ObservableObject {
             pause()
         } else {
             fileLog("Resuming")
+            if let engine = engine, !engine.isRunning {
+                // Engine stopped while paused (screen lock, sleep, or
+                // interruption). Scheduled segments are cleared when the
+                // engine stops, so a plain play() would be silent — restart
+                // and reschedule the current track from the saved position.
+                resumePlaybackAfterInterruption()
+                return
+            }
             playerNode.play()
             isPlaying = true
             lastTickTimestamp = Date()

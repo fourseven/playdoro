@@ -7,6 +7,9 @@ let package = Package(
         .macOS(.v14),
         .iOS(.v17),
     ],
+    products: [
+        .library(name: "PlexodoroKit", targets: ["PlexodoroKit"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],

@@ -252,8 +252,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "file:///Users/mathew/Development/plexodoro";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
+				branch = main;
+				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

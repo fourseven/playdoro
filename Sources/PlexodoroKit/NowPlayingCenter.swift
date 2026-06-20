@@ -1,6 +1,9 @@
 #if canImport(UIKit)
+import Logging
 import MediaPlayer
 import UIKit
+
+private let log = Logger(label: "com.plexodoro.nowplaying")
 
 /// Drives the iOS lock-screen / Control Center "Now Playing" card:
 /// `MPNowPlayingInfoCenter` for metadata + artwork, `MPRemoteCommandCenter`
@@ -64,13 +67,20 @@ final class NowPlayingCenter {
         artworkURLKey = url.absoluteString
         artworkTask?.cancel()
         artworkTask = Task { [weak self] in
+            log.info("artwork: fetching \(url.absoluteString)")
             guard let data = await loadAlbumArtData(from: url),
                   let image = UIImage(data: data),
-                  !Task.isCancelled else { return }
+                  !Task.isCancelled else {
+                log.info("artwork: no image (cancelled or decode failed)")
+                return
+            }
+            log.info("artwork: decoded image size \(image.size.width)x\(image.size.height), main=\(Thread.isMainThread)")
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            log.info("artwork: created MPMediaItemArtwork, setting info")
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            log.info("artwork: info set")
             self?.artworkTask = nil
         }
     }

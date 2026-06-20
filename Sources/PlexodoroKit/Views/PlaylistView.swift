@@ -53,52 +53,36 @@ struct PlaylistView: View {
     }
 
     private var peek: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
+        HStack(spacing: 10) {
+            Image(systemName: "list.bullet")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.55))
 
-            let next = upcoming.prefix(2)
-            if next.isEmpty {
-                Text("Last track")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-            } else {
-                ForEach(Array(next), id: \.track.id) { item in
-                    QueueRow(
-                        track: item.track,
-                        thumbURL: thumbURL(for: item.track),
-                        isCurrent: false,
-                        isDownloading: isDownloading,
-                        isSeed: isSeed(item.track),
-                        accentColor: accentColor
-                    )
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Up next · \(tracks.count) tracks")
+                    .font(.caption2.weight(.medium))
+                    .textCase(.uppercase)
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(upcoming.first?.track.title ?? "End of queue")
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .foregroundStyle(.white)
             }
+
+            Spacer()
+
+            Image(systemName: "chevron.up")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.55))
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
         )
-    }
-
-    private var header: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "list.bullet")
-                .font(.caption2)
-            Text("Up next")
-                .font(.caption.weight(.medium))
-                .textCase(.uppercase)
-                .tracking(1)
-            Spacer()
-            Text("\(tracks.count) tracks")
-                .font(.caption2.monospacedDigit())
-            Image(systemName: "chevron.up")
-                .font(.caption2.weight(.semibold))
-        }
-        .foregroundStyle(.white.opacity(0.55))
     }
 
     private var queueSheet: some View {

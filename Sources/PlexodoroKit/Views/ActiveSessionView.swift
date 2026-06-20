@@ -31,7 +31,7 @@ struct ActiveSessionView: View {
             }
 
             VStack(spacing: 0) {
-                scrollContent
+                sessionContent
                     .padding(.horizontal, 20)
                 bottomBar
                     .padding(.horizontal, 20)
@@ -44,48 +44,47 @@ struct ActiveSessionView: View {
         .animation(.easeInOut(duration: 0.4), value: palette)
     }
 
-    private var scrollContent: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                albumHero
+    private var sessionContent: some View {
+        VStack(spacing: 18) {
+            albumHero
 
-                timerBlock
+            timerBlock
 
-                trackInfo
+            trackInfo
 
-                transportRow
+            transportRow
 
-                volumeRow
+            volumeRow
 
-                if appState.state == .finished {
-                    Text("Pomodoro complete")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(accentColor)
-                        .transition(.opacity)
-                }
-
-                if !appState.playlistTracks.isEmpty {
-                    PlaylistView(
-                        tracks: appState.playlistTracks,
-                        currentTrackIndex: appState.currentTrackIndex,
-                        isDownloading: appState.isDownloading,
-                        serverURL: serverURL,
-                        token: token,
-                        isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) },
-                        accentColor: accentColor
-                    )
-                    .padding(.top, 8)
-                }
+            if appState.state == .finished {
+                Text("Pomodoro complete")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(accentColor)
+                    .transition(.opacity)
             }
-            .padding(.top, 40)
-            .padding(.bottom, 24)
+
+            Spacer(minLength: 12)
+
+            if !appState.playlistTracks.isEmpty {
+                PlaylistView(
+                    tracks: appState.playlistTracks,
+                    currentTrackIndex: appState.currentTrackIndex,
+                    isDownloading: appState.isDownloading,
+                    serverURL: serverURL,
+                    token: token,
+                    isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) },
+                    accentColor: accentColor
+                )
+            }
         }
-        .scrollIndicators(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 20)
     }
 
     private var albumHero: some View {
         AlbumArt(url: currentThumbURL)
-            .frame(width: 240, height: 240)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: 240, maxHeight: 240)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: .black.opacity(0.5), radius: 24, x: 0, y: 12)
             .overlay(

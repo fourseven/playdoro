@@ -8,13 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		000000000000000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000002 /* main.swift */; };
+		000000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000004 /* Assets.xcassets */; };
 		000000000000000000000018 /* PlexodoroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000019 /* PlexodoroKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000002 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		000000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		000000000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Plexodoro/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,7 +35,7 @@
 			children = (
 				000000000000000000000002 /* main.swift */,
 			);
-			path = Sources;
+			path = Plexodoro;
 			sourceTree = "<group>";
 		};
 		000000000000000000000007 = {
@@ -104,6 +105,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				000000000000000000000021 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,7 +181,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_FILE = Plexodoro/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Plexodoro;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -205,7 +207,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_FILE = Plexodoro/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Plexodoro;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -33,10 +33,7 @@ struct ActiveSessionView: View {
             VStack(spacing: 0) {
                 sessionContent
                     .padding(.horizontal, 20)
-                bottomBar
-                    .padding(.horizontal, 20)
                 upNextBar
-                    .padding(.top, 24)
             }
         }
         #if os(iOS)
@@ -64,7 +61,11 @@ struct ActiveSessionView: View {
                     .transition(.opacity)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 16)
+
+            bottomBar
+
+            Spacer(minLength: 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 20)

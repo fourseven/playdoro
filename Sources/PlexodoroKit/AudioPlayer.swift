@@ -339,15 +339,8 @@ class AudioPlayer: ObservableObject {
         #endif
     }
 
-    private func setIdleTimerDisabled(_ disabled: Bool) {
-        #if canImport(UIKit)
-        UIApplication.shared.isIdleTimerDisabled = disabled
-        #endif
-    }
-
     func downloadAndPlay(tracks: [Track], urls: [URL]) async -> [Track] {
         configureAudioSession()
-        setIdleTimerDisabled(true)
         try? FileManager.default.removeItem(at: fileLogURL)
         fileLog("Downloading \(tracks.count) tracks, playing first immediately…")
 
@@ -568,7 +561,6 @@ class AudioPlayer: ObservableObject {
         accumulatedPlayTime = 0
         isPlaying = false
         currentProgress = 0
-        setIdleTimerDisabled(false)
         fileLog("STOP complete")
     }
 

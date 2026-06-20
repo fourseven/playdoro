@@ -359,6 +359,9 @@ class AppState: ObservableObject {
         }
         let track = playlistTracks[currentTrackIndex]
         let durationSeconds = track.duration / 1000
+        log.info("NowPlaying: building art URL for \(track.title)")
+        let artworkURL = client?.thumbURL(for: track)
+        log.info("NowPlaying: art URL = \(artworkURL?.absoluteString ?? "nil"), updating centre")
         nowPlaying.update(
             title: track.title,
             artist: track.artist,
@@ -366,8 +369,9 @@ class AppState: ObservableObject {
             durationSeconds: durationSeconds,
             elapsedSeconds: durationSeconds * player.currentProgress,
             isPlaying: player.isPlaying,
-            artworkURL: client?.thumbURL(for: track)
+            artworkURL: artworkURL
         )
+        log.info("NowPlaying: centre updated")
     }
     #endif
 

@@ -138,17 +138,17 @@ actor PlexClient: MusicProvider {
 
     nonisolated func thumbURL(for track: Track) -> URL? {
         guard let thumb = track.thumb else { return nil }
-        let item = URLQueryItem(name: "X-Plex-Token", value: token)
-        var components = URLComponents(string: serverURL + thumb)!
-        components.queryItems = [item]
-        return components.url
+        return tokenURL(path: thumb)
     }
 
     nonisolated func streamURL(for track: Track) -> URL? {
         guard !track.key.isEmpty else { return nil }
-        let item = URLQueryItem(name: "X-Plex-Token", value: token)
-        var components = URLComponents(string: serverURL + track.key)!
-        components.queryItems = [item]
+        return tokenURL(path: track.key)
+    }
+
+    private nonisolated func tokenURL(path: String) -> URL? {
+        guard var components = URLComponents(string: serverURL + path) else { return nil }
+        components.queryItems = [URLQueryItem(name: "X-Plex-Token", value: token)]
         return components.url
     }
 }

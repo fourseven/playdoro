@@ -6,10 +6,10 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
 
 - `swift build` — build (macOS)
 - `swift test` — run all tests (XCTest, 36 cases across 7 suites)
-- **iOS:** `xcodebuild -scheme Plexodoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
-- **Device:** `xcodebuild -scheme Plexodoro -destination "platform=iOS,name=<device>" build -allowProvisioningUpdates`
+- **iOS simulator:** `xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
+- **iOS device:** `xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro -destination "platform=iOS,name=<device>" build -allowProvisioningUpdates`
 - No lint, formatter, or CI configured.
-- SPM package for macOS (`Plexodoro` executable + `PlexodoroKit` library) plus a separate `iOSApp/Plexodoro.xcodeproj` for iOS (`DerivedData/` gitignored).
+- SPM package at repo root produces two products: the `Plexodoro` macOS executable and the `PlexodoroKit` library (linked by both the macOS executable and the iOS Xcode project). The iOS app lives in a separate `iOSApp/Plexodoro.xcodeproj` (`DerivedData/` gitignored).
 
 ## Dependencies
 
@@ -18,11 +18,11 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
 
 ## Architecture
 
-- **Entrypoint:** `Sources/Plexodoro/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS)
+- **Entrypoint:** `Sources/PlexodoroKit/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS). Both apps (`Sources/Plexodoro/main.swift` and `iOSApp/Plexodoro/main.swift`) just call `PlexodoroApp.main()` from PlexodoroKit.
 - **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicProvider` + `AudioPlayer` directly
 - **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (Plex/Spotify interchangeable)
 - **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicProvider`) — Plex HTTP API with self-signed cert support via `CertDelegate`
-- **Audio:** `AudioPlayer` (`@MainActor`) — wraps `AVAudioEngine` + `AVAudioPlayerNode`, downloads tracks via `TrackCache` before playback
+- **Audio:** `AudioPlayer` (`@MainActor`) — wraps `AVAudioEngine` + `AVAudioPlayerNode`, downloads tracks via `TrackCache` before playback. On iOS, handles `AVAudioSession` interruptions and `AVAudioEngine` configuration changes so playback survives screen lock, sleep, and audio route swaps.
 - **EQ:** `AudioEQ` — manages `AVAudioUnitEQ` and named presets (Flat, HD 6XX, Warm, Bright)
 - **Cache:** `TrackCache` (`actor`) — bounded on-disk LRU cache for downloaded audio files (default 500 MB)
 - **Engine:** `PomodoroEngine` (value-type struct) — two-phase pack algorithm (lookahead random → greedy fill)
@@ -69,3 +69,6 @@ Music provider is now a protocol so Plex/Spotify are interchangeable:
 - Tracks download sequentially to a bounded on-disk cache before `AVAudioEngine` starts; cache persists across sessions
 - Audio log at `<tmp>/plexodoro_audio_player.log` (OSLog + file)
 - No git remotes — local-only repo
+- **iOS Xcode project + SPM:** the iOS app references the local package by `file://` URL with `branch = main`. SPM does a real git checkout, so **working-tree changes to `Sources/PlexodoroKit/*` are not seen by the iOS build until committed**. `PlexodoroKit` must remain declared as a `.library` product in `Package.swift` (not just a target) or the iOS app fails with "Missing package product 'PlexodoroKit'".
+- **iOS Xcode project paths:** all source/asset files live in `iOSApp/Plexodoro/` (not `iOSApp/Sources/`). The pbxproj group `path = Plexodoro`, `INFOPLIST_FILE = Plexodoro/Info.plist`, and `Assets.xcassets` fileRef path is `Plexodoro/Assets.xcassets` — keep these consistent if rearranging files.
+- **iOS background audio:** screen locks normally during playback (no idle-timer wake lock). Audio continues in the background via `UIBackgroundModes: audio` (`iOSApp/Plexodoro/Info.plist`) + `AVAudioSession.setCategory(.playback)` (in `AudioPlayer.configureAudioSession`). `AudioPlayer` also observes `AVAudioSession.interruptionNotification` and `.AVAudioEngineConfigurationChange` to reschedule the current track from `accumulatedPlayTime` after interruptions/route swaps.

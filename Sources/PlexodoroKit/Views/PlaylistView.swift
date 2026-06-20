@@ -7,6 +7,7 @@ struct PlaylistView: View {
     let serverURL: String
     let token: String
     let isSeed: (Track) -> Bool
+    var accentColor: Color = Theme.accent
 
     init(
         tracks: [Track],
@@ -14,7 +15,8 @@ struct PlaylistView: View {
         isDownloading: Bool,
         serverURL: String,
         token: String,
-        isSeed: @escaping (Track) -> Bool = { _ in false }
+        isSeed: @escaping (Track) -> Bool = { _ in false },
+        accentColor: Color = Theme.accent
     ) {
         self.tracks = tracks
         self.currentTrackIndex = currentTrackIndex
@@ -22,6 +24,7 @@ struct PlaylistView: View {
         self.serverURL = serverURL
         self.token = token
         self.isSeed = isSeed
+        self.accentColor = accentColor
     }
 
     private func thumbURL(for track: Track) -> URL? {
@@ -76,7 +79,7 @@ struct PlaylistView: View {
                         .padding(.vertical, 6)
                         .background(
                             i == currentTrackIndex
-                                ? Theme.accent.opacity(0.18)
+                                ? accentColor.opacity(0.20)
                                 : Color.clear,
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                         )

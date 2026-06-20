@@ -5,9 +5,30 @@ struct ActiveSessionView: View {
     let serverURL: String
     let token: String
 
+    @State private var palette: AlbumPalette?
+
+    private var accentGradient: LinearGradient {
+        if let palette {
+            return LinearGradient(
+                colors: [palette.primary, palette.secondary],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return Theme.accentGradient
+    }
+
+    private var accentColor: Color {
+        palette?.primary ?? Theme.accent
+    }
+
     var body: some View {
         ZStack {
-            AlbumArtBackdrop(url: currentThumbURL)
+            AlbumArtBackdrop(url: currentThumbURL) { newPalette in
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    palette = newPalette
+                }
+            }
 
             VStack(spacing: 0) {
                 scrollContent
@@ -20,6 +41,7 @@ struct ActiveSessionView: View {
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
+        .animation(.easeInOut(duration: 0.4), value: palette)
     }
 
     private var scrollContent: some View {
@@ -38,7 +60,7 @@ struct ActiveSessionView: View {
                 if appState.state == .finished {
                     Text("Pomodoro complete")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(accentColor)
                         .transition(.opacity)
                 }
 
@@ -49,7 +71,8 @@ struct ActiveSessionView: View {
                         isDownloading: appState.isDownloading,
                         serverURL: serverURL,
                         token: token,
-                        isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) }
+                        isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) },
+                        accentColor: accentColor
                     )
                     .padding(.top, 8)
                 }
@@ -77,7 +100,8 @@ struct ActiveSessionView: View {
                 .font(Theme.timerFont)
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
-                .shadow(color: .black.opacity(0.4), radius: 12)
+                .shadow(color: accentColor.opacity(0.45), radius: 20)
+                .shadow(color: .black.opacity(0.4), radius: 8)
 
             Text(timeLabel)
                 .font(.caption.weight(.medium))
@@ -110,7 +134,7 @@ struct ActiveSessionView: View {
         VStack(spacing: 8) {
             ProgressView(value: appState.player.currentProgress)
                 .progressViewStyle(.linear)
-                .tint(.white)
+                .tint(accentGradient)
 
             HStack {
                 Text(currentTrackElapsed)
@@ -149,6 +173,7 @@ struct ActiveSessionView: View {
                     .frame(width: 56, height: 56)
                     .foregroundStyle(.white.opacity(0.85))
                     .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
 
@@ -157,9 +182,9 @@ struct ActiveSessionView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Theme.accentGradient)
+                        .fill(accentGradient)
                         .frame(width: 76, height: 76)
-                        .shadow(color: Theme.accent.opacity(0.45), radius: 18, x: 0, y: 6)
+                        .shadow(color: accentColor.opacity(0.55), radius: 22, x: 0, y: 6)
                     Image(systemName: appState.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title.weight(.bold))
                         .foregroundStyle(.white)
@@ -169,6 +194,7 @@ struct ActiveSessionView: View {
             .buttonStyle(.plain)
             .disabled(appState.playlistTracks.isEmpty)
         }
+        .padding(.top, 4)
     }
 
     private var timeLabel: String {

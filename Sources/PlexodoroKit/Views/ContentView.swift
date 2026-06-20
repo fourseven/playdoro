@@ -8,6 +8,18 @@ struct ContentView: View {
     @State private var searchError: String?
     @State private var isSearching = false
     @State private var searchTaskID = UUID()
+    @State private var idlePalette: AlbumPalette?
+
+    private var idleAccentGradient: LinearGradient {
+        if let idlePalette {
+            return LinearGradient(
+                colors: [idlePalette.primary, idlePalette.secondary],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return Theme.accentGradient
+    }
 
     var body: some View {
         #if os(macOS)
@@ -124,7 +136,11 @@ struct ContentView: View {
 
     private var idleView: some View {
         ZStack {
-            AlbumArtBackdrop(url: idleBackdropURL)
+            AlbumArtBackdrop(url: idleBackdropURL) { newPalette in
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    idlePalette = newPalette
+                }
+            }
 
             ScrollView {
                 VStack(spacing: 24) {
@@ -160,7 +176,9 @@ struct ContentView: View {
                         onRemove: appState.removeSeed,
                         onStart: { seeds in
                             appState.startPomodoro(seedTracks: seeds)
-                        }
+                        },
+                        accentGradient: idleAccentGradient,
+                        accentColor: idlePalette?.primary ?? Theme.accent
                     )
 
                     if appState.seedTracks.isEmpty {
@@ -175,8 +193,8 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
                             .foregroundStyle(.white)
-                            .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: Theme.accent.opacity(0.35), radius: 14, x: 0, y: 6)
+                            .background(idleAccentGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: (idlePalette?.primary ?? Theme.accent).opacity(0.35), radius: 14, x: 0, y: 6)
                         }
                         .buttonStyle(.plain)
                     }

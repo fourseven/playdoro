@@ -12,10 +12,13 @@ private let backdropSession: URLSession = {
 
 /// Full-bleed, blurred album-art backdrop with a darkening overlay.
 /// Used as the immersive background for active session and idle screens.
+/// Reports the extracted two-color palette via `onPalette` so callers can
+/// theme accents, gradients, and tints to match the art.
 struct AlbumArtBackdrop: View {
     let url: URL?
     var blurRadius: CGFloat = 60
     var overlayOpacity: Double = 0.55
+    var onPalette: ((AlbumPalette?) -> Void)? = nil
 
     @State private var imageData: Data?
 
@@ -69,19 +72,31 @@ struct AlbumArtBackdrop: View {
     private func loadImage() async {
         guard let url else {
             imageData = nil
+            await reportPalette(nil)
             return
         }
         if let cached = URLCache.shared.cachedResponse(for: URLRequest(url: url))?.data {
             imageData = cached
+            await reportPalette(cached)
             return
         }
         do {
             let (data, response) = try await backdropSession.data(from: url)
             if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
                 imageData = data
+                await reportPalette(data)
             }
         } catch {
             log.debug("Backdrop fetch failed: \(error.localizedDescription)")
         }
+    }
+
+    private func reportPalette(_ data: Data?) async {
+        guard let data else {
+            onPalette?(nil)
+            return
+        }
+        let palette = await PaletteExtractor.extract(from: data)
+        onPalette?(palette)
     }
 }

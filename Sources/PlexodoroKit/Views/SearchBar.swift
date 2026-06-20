@@ -13,6 +13,8 @@ struct SearchBar: View {
     let onAdd: (Track) -> Void
     let onRemove: (Track) -> Void
     let onStart: ([Track]) -> Void
+    var accentGradient: LinearGradient = Theme.accentGradient
+    var accentColor: Color = Theme.accent
 
     private func thumbURL(for track: Track) -> URL? {
         guard let thumb = track.thumb else { return nil }
@@ -77,8 +79,8 @@ struct SearchBar: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                     .foregroundStyle(.white)
-                    .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .shadow(color: Theme.accent.opacity(0.35), radius: 14, x: 0, y: 6)
+                    .background(accentGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: accentColor.opacity(0.35), radius: 14, x: 0, y: 6)
                 }
                 .buttonStyle(.plain)
             }
@@ -141,7 +143,7 @@ struct SearchBar: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                             Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
-                                .foregroundStyle(isSelected ? Theme.accent : (canAdd ? .white.opacity(0.85) : .white.opacity(0.3)))
+                                .foregroundStyle(isSelected ? accentColor : (canAdd ? .white.opacity(0.85) : .white.opacity(0.3)))
                                 .font(.title3)
                         }
                         .padding(.horizontal, 10)

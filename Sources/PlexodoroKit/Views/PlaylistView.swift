@@ -53,9 +53,9 @@ struct PlaylistView: View {
     }
 
     private var peek: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: "list.bullet")
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.white.opacity(0.55))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -65,24 +65,40 @@ struct PlaylistView: View {
                     .tracking(1)
                     .foregroundStyle(.white.opacity(0.55))
                 Text(upcoming.first?.track.title ?? "End of queue")
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .foregroundStyle(.white)
+                if let artist = upcoming.first?.track.artist {
+                    Text(artist)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
             }
 
             Spacer()
 
             Image(systemName: "chevron.up")
-                .font(.caption.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.55))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(alignment: .top) {
+            dockShape
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .overlay(alignment: .top) {
+            dockShape
                 .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-        )
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private var dockShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
     }
 
     private var queueSheet: some View {

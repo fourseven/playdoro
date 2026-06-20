@@ -36,9 +36,7 @@ struct ActiveSessionView: View {
                 bottomBar
                     .padding(.horizontal, 20)
                 upNextBar
-                    .padding(.horizontal, 20)
                     .padding(.top, 24)
-                    .padding(.bottom, 8)
             }
         }
         #if os(iOS)

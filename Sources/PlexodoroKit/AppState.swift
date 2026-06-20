@@ -419,11 +419,6 @@ class AppState: ObservableObject {
         player.applyEQ(preset: preset)
     }
 
-    func pausePlayback() {
-        guard state == .running, !isTimerPaused else { return }
-        player.pause()
-    }
-
     private func startTimer(duration: TimeInterval) {
         timeRemaining = duration
         timerSubscription = Timer.publish(every: 1, on: .main, in: .common)

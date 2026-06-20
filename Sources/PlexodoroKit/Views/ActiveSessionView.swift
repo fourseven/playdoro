@@ -4,6 +4,7 @@ struct ActiveSessionView: View {
     @ObservedObject var appState: AppState
     let serverURL: String
     let token: String
+    @Binding var showSettings: Bool
 
     @State private var palette: AlbumPalette?
 
@@ -33,10 +34,27 @@ struct ActiveSessionView: View {
             content
         }
         #if os(iOS)
+        .overlay(alignment: .topTrailing) { settingsButton }
         .toolbar(.hidden, for: .navigationBar)
         #endif
         .animation(.easeInOut(duration: 0.4), value: palette)
     }
+
+    #if os(iOS)
+    private var settingsButton: some View {
+        Button { showSettings = true } label: {
+            Image(systemName: "gearshape")
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 16)
+        .padding(.top, 8)
+    }
+    #endif
 
     // iOS fills the screen (Spacers + docked up-next bar); macOS sizes a
     // compact menu-bar popover, so the layout hugs its content.
@@ -86,8 +104,6 @@ struct ActiveSessionView: View {
             trackInfo
 
             transportRow
-
-            volumeRow
 
             if appState.state == .finished {
                 Text("Pomodoro complete")

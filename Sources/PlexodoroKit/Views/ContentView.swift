@@ -255,7 +255,7 @@ struct ContentView: View {
     }
 
     private var activeView: some View {
-        ActiveSessionView(appState: appState, serverURL: appState.serverURL, token: appState.token)
+        ActiveSessionView(appState: appState, serverURL: appState.serverURL, token: appState.token, showSettings: $showSettings)
     }
 
     private var settingsContent: some View {

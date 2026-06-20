@@ -3,9 +3,6 @@ import Logging
 
 public struct PlexodoroApp: App {
     @StateObject private var appState = AppState()
-    #if os(iOS)
-    @Environment(\.scenePhase) private var scenePhase
-    #endif
 
     public init() {
         LoggingSystem.bootstrap { label in
@@ -23,11 +20,6 @@ public struct PlexodoroApp: App {
         WindowGroup {
             NavigationStack {
                 ContentView(appState: appState)
-            }
-            .onChange(of: scenePhase) { _, newPhase in
-                if newPhase == .background, appState.state == .running {
-                    appState.pausePlayback()
-                }
             }
         }
         #endif

@@ -1,0 +1,24 @@
+{
+  "originHash" : "3771c650e7c4233db518e1c1997e9e24d9ef577fd81ca28eb8ca653ca563f40a",
+  "pins" : [
+    {
+      "identity" : "plexodoro",
+      "kind" : "localSourceControl",
+      "location" : "/Users/mathew/Development/plexodoro",
+      "state" : {
+        "branch" : "main",
+        "revision" : "76a54b872ae4a50262c0f4dfc4c4a23b73e0a746"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "92448c359f00ebe36ae97d3bd9086f13c7692b5a",
+        "version" : "1.13.2"
+      }
+    }
+  ],
+  "version" : 3
+}

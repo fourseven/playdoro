@@ -35,6 +35,9 @@ struct ActiveSessionView: View {
                     .padding(.horizontal, 20)
                 bottomBar
                     .padding(.horizontal, 20)
+                upNextBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
                     .padding(.bottom, 8)
             }
         }
@@ -64,21 +67,24 @@ struct ActiveSessionView: View {
             }
 
             Spacer(minLength: 12)
-
-            if !appState.playlistTracks.isEmpty {
-                PlaylistView(
-                    tracks: appState.playlistTracks,
-                    currentTrackIndex: appState.currentTrackIndex,
-                    isDownloading: appState.isDownloading,
-                    serverURL: serverURL,
-                    token: token,
-                    isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) },
-                    accentColor: accentColor
-                )
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private var upNextBar: some View {
+        if !appState.playlistTracks.isEmpty {
+            PlaylistView(
+                tracks: appState.playlistTracks,
+                currentTrackIndex: appState.currentTrackIndex,
+                isDownloading: appState.isDownloading,
+                serverURL: serverURL,
+                token: token,
+                isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) },
+                accentColor: accentColor
+            )
+        }
     }
 
     private var albumHero: some View {
@@ -204,8 +210,7 @@ struct ActiveSessionView: View {
     private var currentTrackSubtitle: String? {
         let i = appState.currentTrackIndex
         guard i < appState.playlistTracks.count else { return nil }
-        let track = appState.playlistTracks[i]
-        return "\(track.artist) — \(track.album)"
+        return appState.playlistTracks[i].album
     }
 
     private var currentThumbURL: URL? {

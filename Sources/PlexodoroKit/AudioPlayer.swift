@@ -79,15 +79,22 @@ class AudioPlayer: ObservableObject {
 
     var remainingOnCurrentTrack: TimeInterval {
         guard currentTrackIndex < audioFiles.count else { return 0 }
-        let duration = currentTrackDuration
-        let current: TimeInterval
-        if let last = lastTickTimestamp {
-            current = accumulatedPlayTime + Date().timeIntervalSince(last)
-        } else {
-            current = accumulatedPlayTime
-        }
-        return max(0, duration - current)
+        return max(0, currentTrackDuration - currentElapsed)
     }
+
+    /// Live seconds played into the current track, including time since the
+    /// last progress tick. Used as the lock-screen scrubber baseline.
+    var currentElapsed: TimeInterval {
+        guard currentTrackIndex >= 0, currentTrackIndex < audioFiles.count else { return 0 }
+        if let last = lastTickTimestamp {
+            return accumulatedPlayTime + Date().timeIntervalSince(last)
+        }
+        return accumulatedPlayTime
+    }
+
+    /// Actual decoded duration of the current track (frames / sample rate),
+    /// which can differ from the provider-reported duration.
+    var currentDuration: TimeInterval { currentTrackDuration }
 
     // MARK: - Interruption Handling
 

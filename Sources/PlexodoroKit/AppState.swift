@@ -358,13 +358,16 @@ class AppState: ObservableObject {
             return
         }
         let track = playlistTracks[currentTrackIndex]
-        let durationSeconds = track.duration / 1000
+        // Use the decoded-audio timeline so the scrubber baseline and duration
+        // share one clock; fall back to the provider duration before playback
+        // has decoded a file.
+        let durationSeconds = player.currentDuration > 0 ? player.currentDuration : track.duration / 1000
         nowPlaying.update(
             title: track.title,
             artist: track.artist,
             album: track.album,
             durationSeconds: durationSeconds,
-            elapsedSeconds: durationSeconds * player.currentProgress,
+            elapsedSeconds: player.currentElapsed,
             isPlaying: player.isPlaying,
             artworkURL: client?.thumbURL(for: track)
         )

@@ -10,7 +10,7 @@ actor PlexClient: MusicProvider {
     private let decoder = JSONDecoder()
     private let session: URLSession
     private let delegate = CertDelegate()
-    private var cachedMusicSectionID: Int?
+    private var cachedMusicSectionIDs: [Int]?
 
     init(serverURL: String, token: String) {
         self.serverURL = serverURL
@@ -117,18 +117,20 @@ actor PlexClient: MusicProvider {
     func searchTracks(query: String, limit: Int = 20) async throws -> [Track] {
         log.debug("Searching: '\(query)'")
 
-        let sectionID = try await musicSectionID()
+        let sectionIDs = try await musicSectionIDs()
         let tokens = query.split(separator: " ").map(String.init).filter { !$0.isEmpty }
-        let searchTerms = tokens.count > 1 ? Array(Set(tokens + [query])) : [query]
+        let searchTerms = tokens.count > 1 ? Array(Set(tokens)) : [query]
         let perSearchLimit = 50
 
         let batches: [[Track]] = try await withThrowingTaskGroup(of: [Track].self) { group in
-            for term in searchTerms {
-                group.addTask { [self] in
-                    try await self.searchInSection(sectionID: sectionID, field: "title", value: term, limit: perSearchLimit)
-                }
-                group.addTask { [self] in
-                    try await self.searchInSection(sectionID: sectionID, field: "artist.title", value: term, limit: perSearchLimit)
+            for sectionID in sectionIDs {
+                for term in searchTerms {
+                    group.addTask { [self] in
+                        try await self.searchInSection(sectionID: sectionID, field: "title", value: term, limit: perSearchLimit)
+                    }
+                    group.addTask { [self] in
+                        try await self.searchInSection(sectionID: sectionID, field: "artist.title", value: term, limit: perSearchLimit)
+                    }
                 }
             }
             var results: [[Track]] = []
@@ -158,17 +160,18 @@ actor PlexClient: MusicProvider {
             .map { $0.track }
     }
 
-    private func musicSectionID() async throws -> Int {
-        if let id = cachedMusicSectionID { return id }
+    private func musicSectionIDs() async throws -> [Int] {
+        if let ids = cachedMusicSectionIDs { return ids }
 
         let data = try await fetchJSON(path: "/library/sections")
         let container = try decoder.decode(PlexSectionsResponse.self, from: data).mediaContainer
-        guard let section = container.directories?.first(where: { $0.type == "artist" }),
-              let id = Int(section.key) else {
-            throw PlexodoroError.serverUnreachable
-        }
-        cachedMusicSectionID = id
-        return id
+        let ids = container.directories?
+            .filter { $0.type == "artist" }
+            .compactMap { Int($0.key) } ?? []
+
+        guard !ids.isEmpty else { throw PlexodoroError.serverUnreachable }
+        cachedMusicSectionIDs = ids
+        return ids
     }
 
     private func searchInSection(sectionID: Int, field: String, value: String, limit: Int) async throws -> [Track] {

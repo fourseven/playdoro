@@ -170,6 +170,30 @@ struct PlexPartJSON: Decodable {
     let key: String?
 }
 
+// MARK: - Library Sections Models
+
+struct PlexSectionsResponse: Decodable {
+    let mediaContainer: PlexSectionsContainer
+
+    enum CodingKeys: String, CodingKey {
+        case mediaContainer = "MediaContainer"
+    }
+}
+
+struct PlexSectionsContainer: Decodable {
+    let directories: [PlexSection]?
+
+    enum CodingKeys: String, CodingKey {
+        case directories = "Directory"
+    }
+}
+
+struct PlexSection: Decodable {
+    let key: String
+    let type: String?
+    let title: String?
+}
+
 // MARK: - OAuth Models
 
 struct PlexPinResponse: Decodable {

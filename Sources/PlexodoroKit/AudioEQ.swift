@@ -18,67 +18,203 @@ struct EQBand: Equatable, Hashable, Identifiable {
 }
 
 /// A named EQ preset that can be applied to the audio engine.
+///
+/// `author` and `category` describe the source (e.g. author "oratory1990",
+/// category "over-ear") so the picker UI can group and filter presets. The
+/// `id` is the stable string `"<author>/<category>/<name>"` used for
+/// persistence in UserDefaults.
 struct EQPreset: Equatable, Hashable, Identifiable {
-    let id: String
-    let name: String
-    let bands: [EQBand]
-    let preamp: Float
+    var id: String
+    var name: String
+    var author: String
+    var category: String
+    var bands: [EQBand]
+    var preamp: Float
 }
 
 extension EQPreset {
-    /// Flat / bypass EQ. Used as the default.
+    /// Flat / bypass EQ. Used as the default. Not loaded from disk — there is
+    /// no Flat headphone in the AutoEQ dataset.
     static let flat = EQPreset(
         id: "flat",
         name: "Flat",
+        author: "",
+        category: "",
         bands: [],
         preamp: 0
     )
 
-    /// Sennheiser HD 6XX correction from the oratory1990 over-ear target
-    /// (AutoEQ project). Filter labels LSC/HSC map to lowShelf/highShelf.
-    static let hd6xx = EQPreset(
-        id: "hd6xx",
-        name: "HD 6XX",
-        bands: [
-            EQBand(frequency: 105, gain: 6.4, q: 0.70, filterType: .lowShelf),
-            EQBand(frequency: 118, gain: -3.1, q: 0.50, filterType: .parametric),
-            EQBand(frequency: 37, gain: 0.7, q: 3.96, filterType: .parametric),
-            EQBand(frequency: 587, gain: 0.4, q: 1.19, filterType: .parametric),
-            EQBand(frequency: 1227, gain: -1.2, q: 2.53, filterType: .parametric),
-            EQBand(frequency: 2055, gain: 1.2, q: 3.23, filterType: .parametric),
-            EQBand(frequency: 3169, gain: -1.7, q: 3.89, filterType: .parametric),
-            EQBand(frequency: 5332, gain: -1.1, q: 5.75, filterType: .parametric),
-            EQBand(frequency: 8800, gain: 5.1, q: 1.42, filterType: .parametric),
-            EQBand(frequency: 10000, gain: -2.1, q: 0.70, filterType: .highShelf)
-        ],
-        preamp: -6.1
-    )
+    /// All EQ presets bundled with the app, loaded lazily from the
+    /// `EQPresets` resource directory. Includes `.flat` as the first entry.
+    /// Order: Flat, then author → category → name (alphabetical).
+    static let all: [EQPreset] = EQPresetLoader.shared.allPresets
 
-    /// Moondrop Space Travel (v1) correction from the AutoEQ project
-    /// (Kazi database — oratory1990 has not measured this set). 10-band fit
-    /// matches the AVAudioUnitEQ band count.
-    static let spaceTravel = EQPreset(
-        id: "space-travel",
-        name: "Space Travel",
-        bands: [
-            EQBand(frequency: 105, gain: -4.2, q: 0.70, filterType: .lowShelf),
-            EQBand(frequency: 151, gain: -3.4, q: 0.51, filterType: .parametric),
-            EQBand(frequency: 7995, gain: 5.8, q: 0.24, filterType: .parametric),
-            EQBand(frequency: 59, gain: 4.9, q: 0.48, filterType: .parametric),
-            EQBand(frequency: 3749, gain: -6.2, q: 0.92, filterType: .parametric),
-            EQBand(frequency: 10000, gain: -5.7, q: 0.70, filterType: .highShelf),
-            EQBand(frequency: 8394, gain: 2.9, q: 3.66, filterType: .parametric),
-            EQBand(frequency: 5781, gain: 1.6, q: 6.00, filterType: .parametric),
-            EQBand(frequency: 6660, gain: -1.4, q: 6.00, filterType: .parametric),
-            EQBand(frequency: 3487, gain: 0.2, q: 3.77, filterType: .parametric)
-        ],
-        preamp: -5.6
-    )
+    /// Presets grouped by author, for the picker UI.
+    static var byAuthor: [String: [EQPreset]] { EQPresetLoader.shared.byAuthor }
 
-    static let all: [EQPreset] = [.flat, .hd6xx, .spaceTravel]
+    /// Legacy preset IDs from earlier app versions, mapped to their current
+    /// disk-backed equivalents so existing UserDefaults selections keep
+    /// working after the upgrade.
+    private static let legacyIDMap: [String: String] = [
+        "hd6xx": "oratory1990/over-ear/Sennheiser HD 6XX",
+        "space-travel": "Kazi/in-ear/Moondrop Space Travel"
+    ]
 
-    /// Headphone correction profiles shown in the settings UI.
-    static let settingsPresets: [EQPreset] = [.flat, .hd6xx, .spaceTravel]
+    /// Resolve an arbitrary stored ID (legacy or current) to a preset.
+    /// Falls back to `.flat` when the ID is unknown or missing.
+    static func resolve(id: String?) -> EQPreset {
+        guard let id, !id.isEmpty else { return .flat }
+        if id == "flat" { return .flat }
+        let effective = legacyIDMap[id] ?? id
+        return all.first { $0.id == effective } ?? .flat
+    }
+}
+
+/// Parses AutoEQ `ParametricEQ.txt` files and enumerates the bundled preset
+/// catalog. Files look like:
+///
+///     Preamp: -6.1 dB
+///     Filter 1: ON LSC Fc 105 Hz Gain 6.4 dB Q 0.70
+///     Filter 2: ON PK  Fc 8800 Hz Gain 5.1 dB Q 1.42
+///     ...
+///
+/// Filter type codes used by AutoEQ over-ear/in-ear/earbud outputs:
+/// `PK` (peaking), `LSC` (low shelf), `HSC` (high shelf).
+final class EQPresetLoader: Sendable {
+    static let shared = EQPresetLoader()
+
+    /// All bundled presets, ordered: Flat first, then alphabetical by
+    /// author → category → name.
+    let allPresets: [EQPreset]
+
+    /// Presets grouped by author, for the picker UI.
+    let byAuthor: [String: [EQPreset]]
+
+    private init() {
+        var presets: [EQPreset] = [.flat]
+        for entry in Self.enumerateBundled() {
+            if let parsed = Self.parse(entry.url, author: entry.author, category: entry.category, name: entry.name) {
+                presets.append(parsed)
+            }
+        }
+        presets.sort { lhs, rhs in
+            if lhs.author != rhs.author { return lhs.author < rhs.author }
+            if lhs.category != rhs.category { return lhs.category < rhs.category }
+            return lhs.name < rhs.name
+        }
+        self.allPresets = presets
+        self.byAuthor = Dictionary(grouping: presets.filter { !$0.author.isEmpty }, by: \.author)
+    }
+
+    // MARK: - Discovery
+
+    /// Walks the `EQPresets` resource directory. Each leaf `.txt` becomes a
+    /// candidate preset whose path is `<author>/<category>/<name>.txt`.
+    private static func enumerateBundled() -> [(url: URL, author: String, category: String, name: String)] {
+        guard let root = Bundle.module.url(forResource: "EQPresets", withExtension: nil) else {
+            return []
+        }
+        var out: [(URL, String, String, String)] = []
+        if let authorEnumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
+            for case let url as URL in authorEnumerator where url.pathExtension == "txt" {
+                let rel = url.deletingLastPathComponent().path(relativeTo: root)
+                let parts = rel.split(separator: "/", omittingEmptySubsequences: true)
+                guard parts.count == 2 else { continue }
+                let author = String(parts[0])
+                let category = String(parts[1])
+                let name = url.deletingPathExtension().lastPathComponent
+                out.append((url, author, category, name))
+            }
+        }
+        return out
+    }
+
+    // MARK: - Parsing
+
+    /// Parses one AutoEQ ParametricEQ.txt into an `EQPreset`. Returns nil if
+    /// the file is malformed (no usable bands).
+    static func parse(_ url: URL, author: String, category: String, name: String) -> EQPreset? {
+        guard let body = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return parse(body, author: author, category: category, name: name)
+    }
+
+    /// Parses AutoEQ ParametricEQ text. Exposed for tests.
+    static func parse(_ body: String, author: String, category: String, name: String) -> EQPreset? {
+        var preamp: Float = 0
+        var bands: [EQBand] = []
+        for raw in body.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = String(raw).trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("Preamp:") {
+                if let v = Self.firstFloat(in: line, after: "Preamp:") {
+                    preamp = v
+                }
+                continue
+            }
+            if line.hasPrefix("Filter ") {
+                if let band = Self.parseFilterLine(line) {
+                    bands.append(band)
+                }
+            }
+        }
+        guard !bands.isEmpty else { return nil }
+        return EQPreset(
+            id: "\(author)/\(category)/\(name)",
+            name: name,
+            author: author,
+            category: category,
+            bands: bands,
+            preamp: preamp
+        )
+    }
+
+    /// Extracts the numeric value following `keyword` in `line`. Handles
+    /// negative and decimal values. Returns nil if no number is found.
+    private static func firstFloat(in line: String, after keyword: String) -> Float? {
+        guard let range = line.range(of: keyword) else { return nil }
+        let tail = line[range.upperBound...]
+        let scalars = tail.unicodeScalars
+        var idx = scalars.startIndex
+        while idx < scalars.endIndex, CharacterSet(charactersIn: " \t:").contains(scalars[idx]) {
+            idx = scalars.index(after: idx)
+        }
+        var num = ""
+        if idx < scalars.endIndex, scalars[idx] == "-" {
+            num.append("-")
+            idx = scalars.index(after: idx)
+        }
+        while idx < scalars.endIndex {
+            let c = Character(scalars[idx])
+            if c.isNumber || c == "." {
+                num.append(c)
+                idx = scalars.index(after: idx)
+            } else {
+                break
+            }
+        }
+        return Float(num)
+    }
+
+    private static func parseFilterLine(_ line: String) -> EQBand? {
+        let tokens = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        guard tokens.count >= 12, tokens[0] == "Filter" else { return nil }
+        let state = tokens[2]
+        let typeCode = tokens[3]
+        guard state == "ON" else { return nil }
+        guard let fc = Float(tokens[5]),
+              let gain = Float(tokens[8]),
+              let q = Float(tokens[11]) else { return nil }
+        guard let filterType = Self.filterType(code: typeCode) else { return nil }
+        return EQBand(frequency: fc, gain: gain, q: q, filterType: filterType)
+    }
+
+    private static func filterType(code: String) -> EQFilterType? {
+        switch code.uppercased() {
+        case "PK": return .parametric
+        case "LSC", "LS": return .lowShelf
+        case "HSC", "HS": return .highShelf
+        default: return nil
+        }
+    }
 }
 
 /// Manages the AVAudioUnitEQ node and applies presets.
@@ -87,6 +223,15 @@ final class AudioEQ {
     let eqNode = AVAudioUnitEQ(numberOfBands: 10)
 
     private(set) var currentPreset: EQPreset = .flat
+
+    /// When true, the EQ node is hard-bypassed (zero DSP) regardless of the
+    /// selected preset. The preset is remembered so toggling back on restores
+    /// the same sound.
+    var bypassed: Bool = false {
+        didSet {
+            eqNode.bypass = bypassed || currentPreset.bands.isEmpty
+        }
+    }
 
     init() {
         eqNode.bypass = true
@@ -114,7 +259,7 @@ final class AudioEQ {
         }
 
         eqNode.globalGain = preset.preamp
-        eqNode.bypass = preset.bands.isEmpty
+        eqNode.bypass = bypassed || preset.bands.isEmpty
     }
 }
 
@@ -137,5 +282,18 @@ private extension EQBand {
         case .highShelf:
             return .highShelf
         }
+    }
+}
+
+private extension URL {
+    /// Returns the path of this URL relative to `base`, or the absolute path
+    /// if it isn't actually inside `base`.
+    func path(relativeTo base: URL) -> String {
+        let basePath = base.standardizedFileURL.path
+        let selfPath = self.standardizedFileURL.path
+        if selfPath.hasPrefix(basePath + "/") {
+            return String(selfPath.dropFirst(basePath.count + 1))
+        }
+        return selfPath
     }
 }

@@ -7,6 +7,7 @@ enum UserDefaultsKey {
     static let plexClientId = "plexClientId"
     static let savedPlaylists = "savedPlaylists"
     static let eqPresetID = "eqPresetID"
+    static let eqEnabled = "eqEnabled"
 }
 
 func deduplicate(tracks: [Track]) -> [Track] {

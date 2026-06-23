@@ -18,6 +18,9 @@ let package = Package(
             name: "PlexodoroKit",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
+            ],
+            resources: [
+                .copy("Resources/EQPresets")
             ]
         ),
         .executableTarget(

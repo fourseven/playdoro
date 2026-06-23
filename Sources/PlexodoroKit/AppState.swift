@@ -440,10 +440,23 @@ class AppState: ObservableObject {
         player.currentEQPreset
     }
 
+    func setEQEnabled(_ enabled: Bool) {
+        player.setEQEnabled(enabled)
+        UserDefaults.standard.set(enabled, forKey: UserDefaultsKey.eqEnabled)
+    }
+
+    var eqEnabled: Bool {
+        player.eqEnabled
+    }
+
     private func loadSavedEQPreset() {
         let savedID = UserDefaults.standard.string(forKey: UserDefaultsKey.eqPresetID)
-        let preset = EQPreset.settingsPresets.first { $0.id == savedID } ?? .flat
+        let preset = EQPreset.resolve(id: savedID)
         player.applyEQ(preset: preset)
+
+        // UserDefaults stores Bool as NSNumber/Any; default to true if absent.
+        let savedEnabled = UserDefaults.standard.object(forKey: UserDefaultsKey.eqEnabled) as? Bool ?? true
+        player.setEQEnabled(savedEnabled)
     }
 
     private func startTimer(duration: TimeInterval) {

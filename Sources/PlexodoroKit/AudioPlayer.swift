@@ -45,6 +45,7 @@ class AudioPlayer: ObservableObject {
     private var playerNode: AVAudioPlayerNode?
     private var eq: AudioEQ?
     private var pendingEQPreset: EQPreset?
+    private var pendingEQBypassed: Bool = false
 
     private var audioFiles: [AVAudioFile] = []
     private var tracks: [Track] = []
@@ -418,6 +419,7 @@ class AudioPlayer: ObservableObject {
 
         playerNode.volume = volume
 
+        eq.bypassed = pendingEQBypassed
         if let preset = pendingEQPreset {
             eq.apply(preset: preset)
         }
@@ -581,6 +583,17 @@ class AudioPlayer: ObservableObject {
 
     var currentEQPreset: EQPreset {
         eq?.currentPreset ?? pendingEQPreset ?? .flat
+    }
+
+    func setEQEnabled(_ enabled: Bool) {
+        let bypassed = !enabled
+        pendingEQBypassed = bypassed
+        eq?.bypassed = bypassed
+        fileLog("EQ \(enabled ? "enabled" : "disabled (bypassed)")")
+    }
+
+    var eqEnabled: Bool {
+        !(eq?.bypassed ?? pendingEQBypassed)
     }
 
     // MARK: - Progress

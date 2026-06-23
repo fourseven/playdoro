@@ -17,7 +17,7 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
   xcrun devicectl device process launch --device <devicectl-id> com.mathewhartley.plexodoro
   ```
   - List devices: `xcrun devicectl list devices`. Current test phone "Mathew's iPhone" (iPhone 12 Pro): devicectl-id `00000000-0000-0000-0000-000000000000`, UDID `00000000-0000000000000000`.
-  - Apple Developer team `88X59PVX4X` (Individual, Mathew Hartley). `DEVELOPMENT_TEAM` is **not** in pbxproj — pass it on the CLI.
+  - Apple Developer team `88X59PVX4X` (Individual, Mathew Hartley), set in the pbxproj build settings (Debug + Release). The `DEVELOPMENT_TEAM=...` CLI flag is still accepted as an override but no longer required.
   - **Signing/cert errors** ("profile doesn't include certificate", "device isn't registered"): resolve in the **Xcode GUI** — open the project, target → Signing & Capabilities → Automatic + select the team. Xcode regenerates the dev cert and registers the connected device where `xcodebuild -allowProvisioningUpdates` alone won't. Keep the iPhone unlocked.
 - No lint, formatter, or CI configured.
 - SPM package at repo root produces two products: the `Plexodoro` macOS executable and the `PlexodoroKit` library (linked by both the macOS executable and the iOS Xcode project). The iOS app lives in a separate `iOSApp/Plexodoro.xcodeproj` (`DerivedData/` gitignored).

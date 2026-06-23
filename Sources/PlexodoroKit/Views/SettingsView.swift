@@ -11,12 +11,12 @@ struct SettingsView: View {
             #if os(macOS)
             switch route {
             case .main:
-                mainContent
+                macMainContent
             case .eqPicker:
                 EQPickerView(appState: appState, onBack: { route = .main })
             }
             #else
-            mainContent
+            iosMainContent
                 .navigationDestination(for: Route.self) { dest in
                     switch dest {
                     case .main: EmptyView()
@@ -28,7 +28,101 @@ struct SettingsView: View {
         .padding(.vertical, 4)
     }
 
-    private var mainContent: some View {
+    // MARK: - iOS
+
+    #if os(iOS)
+    private var iosMainContent: some View {
+        Form {
+            if appState.isConfigured {
+                connectionSection
+                audioSection
+                Section {
+                    Button("Disconnect", role: .destructive) {
+                        appState.disconnect()
+                    }
+                }
+            } else {
+                Section {
+                    VStack(spacing: 6) {
+                        Text("Not connected")
+                            .font(.headline)
+                        Text("Connect to Plex from the main screen to get started.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    private var connectionSection: some View {
+        Section("Connection") {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Connected")
+                        .font(.body.weight(.medium))
+                    if !appState.serverName.isEmpty {
+                        Text(appState.serverName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(appState.serverURL)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var audioSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { appState.eqEnabled },
+                set: { appState.setEQEnabled($0) }
+            )) {
+                Label("Equalizer", systemImage: "waveform")
+            }
+
+            NavigationLink(value: Route.eqPicker) {
+                presetLabel
+            }
+            .disabled(!appState.eqEnabled)
+        } header: {
+            Text("Audio")
+        } footer: {
+            Text(appState.eqEnabled
+                ? "Applying \"\(appState.currentEQPreset.name)\" correction."
+                : "Apply a headphone correction preset from the bundled AutoEQ catalog.")
+        }
+    }
+
+    private var presetLabel: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(appState.currentEQPreset.name)
+                .font(.body)
+            if !appState.currentEQPreset.author.isEmpty {
+                Text("\(appState.currentEQPreset.author) · \(appState.currentEQPreset.category)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    #endif
+
+    // MARK: - macOS
+
+    #if os(macOS)
+    private var macMainContent: some View {
         VStack(spacing: 12) {
             if appState.isConfigured {
                 VStack(spacing: 6) {
@@ -50,7 +144,7 @@ struct SettingsView: View {
 
                 Divider()
 
-                eqSection
+                macEQSection
 
                 Divider()
 
@@ -67,7 +161,7 @@ struct SettingsView: View {
         }
     }
 
-    private var eqSection: some View {
+    private var macEQSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "waveform")
@@ -87,25 +181,17 @@ struct SettingsView: View {
                 .controlSize(.small)
             }
 
-            #if os(iOS)
-            NavigationLink(value: Route.eqPicker) {
-                eqPickerEntryLabel
-            }
-            .buttonStyle(.plain)
-            .disabled(!appState.eqEnabled)
-            #else
             Button {
                 route = .eqPicker
             } label: {
-                eqPickerEntryLabel
+                macPresetLabel
             }
             .buttonStyle(.plain)
             .disabled(!appState.eqEnabled)
-            #endif
         }
     }
 
-    private var eqPickerEntryLabel: some View {
+    private var macPresetLabel: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text(appState.currentEQPreset.name)
@@ -126,4 +212,5 @@ struct SettingsView: View {
         }
         .contentShape(Rectangle())
     }
+    #endif
 }

@@ -2,22 +2,36 @@ import SwiftUI
 
 struct DiscoveringView: View {
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 24))
-                .foregroundColor(.accentColor)
+        ZStack {
+            Theme.connectBackdrop.ignoresSafeArea()
 
-            Text("Connecting to Plex")
-                .font(.headline)
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(Theme.accentGradient.opacity(0.2))
+                        .frame(width: 120, height: 120)
+                        .blur(radius: 26)
 
-            HStack(spacing: 6) {
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Finding your server…")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    Circle()
+                        .fill(Theme.accent.opacity(0.25))
+                        .frame(width: 78, height: 78)
+
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                }
+
+                Text("Connecting to Plex")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Finding your server…")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
         }
-        .padding(.vertical, 8)
     }
 }

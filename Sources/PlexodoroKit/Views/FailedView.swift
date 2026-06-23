@@ -6,34 +6,54 @@ struct FailedView: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24))
-                .foregroundColor(.orange)
+        ZStack {
+            Theme.connectBackdrop.ignoresSafeArea()
 
-            Text("Connection Failed")
-                .font(.headline)
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(Color.orange.opacity(0.15))
+                        .frame(width: 110, height: 110)
+                        .blur(radius: 22)
 
-            Text(message)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                    Circle()
+                        .fill(Color.orange.opacity(0.2))
+                        .frame(width: 74, height: 74)
 
-            Button {
-                onRetry()
-            } label: {
-                Label("Try Again", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(.orange)
+                }
+
+                Text("Connection Failed")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                VStack(spacing: 12) {
+                    Button {
+                        onRetry()
+                    } label: {
+                        Label("Try Again", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Cancel", role: .cancel) {
+                        onCancel()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 32)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button("Cancel", role: .cancel) {
-                onCancel()
-            }
-            .buttonStyle(.plain)
-            .font(.caption)
+            .padding(.vertical, 16)
         }
-        .padding(.vertical, 8)
     }
 }

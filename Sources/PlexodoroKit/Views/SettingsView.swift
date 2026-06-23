@@ -4,16 +4,26 @@ struct SettingsView: View {
     @ObservedObject var appState: AppState
     @State private var route: Route = .main
 
-    enum Route: Equatable { case main, eqPicker }
+    enum Route: Hashable { case main, eqPicker }
 
     var body: some View {
         Group {
+            #if os(macOS)
             switch route {
             case .main:
                 mainContent
             case .eqPicker:
                 EQPickerView(appState: appState, onBack: { route = .main })
             }
+            #else
+            mainContent
+                .navigationDestination(for: Route.self) { dest in
+                    switch dest {
+                    case .main: EmptyView()
+                    case .eqPicker: EQPickerView(appState: appState)
+                    }
+                }
+            #endif
         }
         .padding(.vertical, 4)
     }
@@ -77,31 +87,43 @@ struct SettingsView: View {
                 .controlSize(.small)
             }
 
-            Button {
-                route = .eqPicker
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(appState.currentEQPreset.name)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        if !appState.currentEQPreset.author.isEmpty {
-                            Text("\(appState.currentEQPreset.author) · \(appState.currentEQPreset.category)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
+            #if os(iOS)
+            NavigationLink(value: Route.eqPicker) {
+                eqPickerEntryLabel
             }
             .buttonStyle(.plain)
             .disabled(!appState.eqEnabled)
+            #else
+            Button {
+                route = .eqPicker
+            } label: {
+                eqPickerEntryLabel
+            }
+            .buttonStyle(.plain)
+            .disabled(!appState.eqEnabled)
+            #endif
         }
+    }
+
+    private var eqPickerEntryLabel: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(appState.currentEQPreset.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if !appState.currentEQPreset.author.isEmpty {
+                    Text("\(appState.currentEQPreset.author) · \(appState.currentEQPreset.category)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
     }
 }

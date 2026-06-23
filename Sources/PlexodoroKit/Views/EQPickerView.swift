@@ -2,11 +2,15 @@ import SwiftUI
 
 /// Searchable picker for the bundled EQ preset catalog.
 ///
-/// Renders inline inside `SettingsView` (the macOS menu-bar popover is too
-/// narrow to host a sheet, so we swap content rather than push).
+/// On macOS, renders inline inside `SettingsView` (the menu-bar popover is too
+/// narrow to host a nav stack, so `SettingsView` swaps content manually and
+/// passes `onBack`). On iOS, `SettingsView` pushes this view onto its
+/// `NavigationStack` — the nav bar gives us the back chevron + title for free,
+/// and `@Environment(\.dismiss)` pops on selection.
 struct EQPickerView: View {
     @ObservedObject var appState: AppState
-    let onBack: () -> Void
+    var onBack: (() -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
 
     @State private var searchText = ""
     @State private var authorFilter: String? = nil
@@ -15,7 +19,9 @@ struct EQPickerView: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            #if os(macOS)
             header
+            #endif
 
             searchBar
 
@@ -25,13 +31,21 @@ struct EQPickerView: View {
 
             list
         }
+        #if os(iOS)
+        .navigationTitle("EQ Presets")
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+
+    private func goBack() {
+        if let onBack { onBack() } else { dismiss() }
     }
 
     // MARK: - Subviews
 
     private var header: some View {
         HStack(spacing: 8) {
-            Button(action: onBack) {
+            Button(action: goBack) {
                 Image(systemName: "chevron.left")
                     .font(.body.weight(.semibold))
             }
@@ -115,7 +129,7 @@ struct EQPickerView: View {
         let isSelected = preset.id == appState.currentEQPreset.id
         return Button {
             appState.applyEQ(preset: preset)
-            onBack()
+            goBack()
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {

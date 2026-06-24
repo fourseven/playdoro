@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Plexodoro — Pomodoro. But it picks the music.</title>
-<meta name="description" content="A Pomodoro timer that packs your Plex library into a perfectly-sized focus playlist. Two-phase packing engine, ~880 headphone EQ presets. macOS menu bar + iOS. Open source." />
-<meta property="og:title" content="Plexodoro — Pomodoro. But it picks the music." />
-<meta property="og:description" content="A Pomodoro timer that packs your Plex library into a perfectly-sized focus playlist. macOS + iOS. Open source." />
+<title>Plexodoro - a Pomodoro timer that picks the music</title>
+<meta name="description" content="A Pomodoro timer that packs your Plex library into a playlist sized to your focus session. A two-phase engine lands on your target length, with EQ presets for around 880 headphones. macOS and iOS, open source." />
+<meta property="og:title" content="Plexodoro - a Pomodoro timer that picks the music" />
+<meta property="og:description" content="A Pomodoro timer that packs your Plex library into a playlist sized to your focus session. A two-phase engine lands on your target length, with EQ presets for around 880 headphones. macOS and iOS, open source." />
 <meta property="og:image" content="screenshots/brag-poster.jpg" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary_large_image" />
@@ -113,7 +113,7 @@
   .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
   .fine { color: var(--muted); font-size: 13px; margin-left: 4px; }
 
-  /* hero timer card — recreates the macOS menu-bar session dropdown */
+  /* hero timer card - recreates the macOS menu-bar session dropdown */
   .timer-card {
     position: relative;
     width: 100%; max-width: 380px; margin: 0 auto;
@@ -309,7 +309,7 @@
     <div>
       <span class="eyebrow"><span class="dot"></span> Open source · macOS + iOS</span>
       <h1>Pomodoro. <br /><span class="grad-text">But it picks the music.</span></h1>
-      <p class="lede">A focus timer that packs your Plex library into a playlist that hits your target length — to the minute. Pick a track. It builds the rest.</p>
+      <p class="lede">A focus timer that packs your Plex library into a playlist sized to your focus session, landing on your target length to the minute. Pick a track and it builds the rest.</p>
       <div class="hero-cta">
         <a class="btn btn-primary" href="https://github.com/fourseven/plexodoro" target="_blank" rel="noopener">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.6 18 4.9 18 4.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
@@ -355,7 +355,7 @@
     <div class="section-head reveal">
       <span class="kicker">The 20-second tour</span>
       <h2>See it packed</h2>
-      <p>Seed track in, a perfectly-sized focus session out.</p>
+      <p>Drop in a seed track and get a focus session that fits the block.</p>
     </div>
     <div class="video-frame reveal">
       <video controls preload="metadata" playsinline poster="screenshots/brag-poster.jpg">
@@ -369,8 +369,8 @@
   <div class="wrap">
     <div class="section-head reveal">
       <span class="kicker">How it works</span>
-      <h2>Pick a track. We pack the rest.</h2>
-      <p>A two-phase engine builds a playlist that fills your focus block — engineered to the minute.</p>
+      <h2>Pick a track, and we pack the rest.</h2>
+      <p>A two-phase engine builds a playlist that fills your focus block, landing on your target length to the minute.</p>
     </div>
     <div class="steps">
       <div class="step reveal">
@@ -381,12 +381,12 @@
       <div class="step reveal">
         <div class="num grad-text">02</div>
         <h3>It packs</h3>
-        <p>A lookahead-random then greedy-fill algorithm stacks tracks to hit your target duration — no awkward gaps.</p>
+        <p>It samples random combinations from your library, then fills any remaining gap so the total lands on your target length.</p>
       </div>
       <div class="step reveal">
         <div class="num grad-text">03</div>
         <h3>You focus</h3>
-        <p>Audio is downloaded ahead and cached. Hit start, lock your screen, disappear into the work.</p>
+        <p>Audio downloads ahead of time, so you can hit start, lock your screen, and get into the work.</p>
       </div>
     </div>
   </div>
@@ -397,7 +397,7 @@
     <div class="section-head reveal">
       <span class="kicker">Features</span>
       <h2>Built for deep work</h2>
-      <p>Native SwiftUI, shared <code>PlexodoroKit</code> core, no telemetry, no accounts.</p>
+      <p>Native SwiftUI on a shared <code>PlexodoroKit</code> core, with no telemetry and no accounts.</p>
     </div>
     <div class="features">
       <div class="feature reveal">
@@ -413,22 +413,22 @@
       <div class="feature reveal">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v7"/><path d="M3 15a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
         <h3>On-device cache</h3>
-        <p>A bounded LRU disk cache downloads tracks ahead of playback so sessions never stall.</p>
+        <p>A size-capped on-disk cache downloads tracks ahead of playback so sessions never stall.</p>
       </div>
       <div class="feature reveal">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg></div>
         <h3>Background audio</h3>
-        <p>Playback survives screen lock, sleep, and route swaps on iOS via AVAudioSession handling.</p>
+        <p>Playback survives screen lock, sleep, and audio route swaps on iOS.</p>
       </div>
       <div class="feature reveal">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg></div>
         <h3>macOS menu bar</h3>
-        <p>Lives in your menu bar — timer, album art, volume, and controls a click away.</p>
+        <p>Lives in your menu bar, with the timer, album art, volume, and controls a click away.</p>
       </div>
       <div class="feature reveal">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div>
         <h3>iOS in your pocket</h3>
-        <p>The same core on iPhone — a shared <code>PlexodoroKit</code> keeps both apps in lockstep.</p>
+        <p>The same core on iPhone, with a shared <code>PlexodoroKit</code> keeping both apps in lockstep.</p>
       </div>
     </div>
   </div>
@@ -465,7 +465,7 @@
   <div class="wrap">
     <div class="cta-band reveal">
       <h2>Focus, scored by your library.</h2>
-      <p>Open source, MIT licensed, no sign-ups.</p>
+      <p>Open source under MIT, with no sign-ups.</p>
       <a class="btn btn-primary" href="https://github.com/fourseven/plexodoro" target="_blank" rel="noopener">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.6 18 4.9 18 4.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
         View on GitHub

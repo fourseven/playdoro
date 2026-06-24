@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plexodoro — Pomodoro. But it picks the music.</title>
+<meta name="description" content="A Pomodoro timer that packs your Plex library into a perfectly-sized focus playlist. Two-phase packing engine, ~880 headphone EQ presets. macOS menu bar + iOS. Open source." />
+<meta property="og:title" content="Plexodoro — Pomodoro. But it picks the music." />
+<meta property="og:description" content="A Pomodoro timer that packs your Plex library into a perfectly-sized focus playlist. macOS + iOS. Open source." />
+<meta property="og:image" content="screenshots/macos-menubar.png" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800;900&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239E52F5'/%3E%3Cstop offset='1' stop-color='%23F24FA8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='%230A0A0F'/%3E%3Ctext x='50' y='72' font-family='Inter,sans-serif' font-size='58' font-weight='900' text-anchor='middle' fill='url(%23g)'%3EP%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg: #0A0A0F;
+    --surface: #1F1F29;
+    --surface-2: #2E2E3D;
+    --accent: #D173EB;
+    --grad-a: #9E52F5;
+    --grad-b: #F24FA8;
+    --text: #F5F5F7;
+    --muted: #9A9AAD;
+    --maxw: 1120px;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  a { color: inherit; }
+  .grad-text {
+    background: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- Nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(10,10,15,0.6);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { font-weight: 900; font-size: 20px; letter-spacing: -0.02em; text-decoration: none; }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color .2s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    padding: 8px 16px; border-radius: 999px;
+    background: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+    color: #fff; font-weight: 600; font-size: 14px;
+  }
+  .nav-cta:hover { color: #fff; opacity: .92; }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 24px; border-radius: 999px;
+    font-weight: 600; font-size: 16px; text-decoration: none;
+    border: 1px solid transparent; cursor: pointer; transition: transform .15s, box-shadow .2s, background .2s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary {
+    background: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+    color: #fff;
+    box-shadow: 0 10px 40px -10px rgba(158,82,245,.6);
+  }
+  .btn-ghost {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.12);
+    color: var(--text);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.08); }
+
+  /* ---------- Hero ---------- */
+  header { position: relative; padding: 80px 0 64px; overflow: hidden; }
+  .glow-bg {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(620px 420px at 78% 8%, rgba(158,82,245,.22), transparent 60%),
+      radial-gradient(560px 420px at 12% 30%, rgba(242,79,168,.16), transparent 60%);
+  }
+  .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px;
+    background: rgba(209,115,235,.1); border: 1px solid rgba(209,115,235,.25);
+    color: var(--accent); font-size: 13px; font-weight: 600; letter-spacing: .02em;
+    margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  h1 {
+    font-size: clamp(38px, 5.4vw, 64px); line-height: 1.04; font-weight: 900;
+    letter-spacing: -0.03em; margin: 0 0 20px;
+  }
+  .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); margin: 0 0 32px; max-width: 520px; }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .fine { color: var(--muted); font-size: 13px; margin-left: 4px; }
+
+  /* hero timer card */
+  .timer-card {
+    position: relative;
+    background: linear-gradient(160deg, var(--surface), rgba(31,31,41,.5));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 28px; padding: 44px 40px 36px;
+    box-shadow: 0 40px 120px -30px rgba(0,0,0,.8);
+  }
+  .timer-card::before {
+    content: ""; position: absolute; inset: -1px; border-radius: 28px; padding: 1px;
+    background: linear-gradient(160deg, rgba(158,82,245,.5), transparent 50%, rgba(242,79,168,.4));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+  }
+  .tc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+  .tc-label { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
+  .tc-chip { font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(209,115,235,.12); padding: 4px 10px; border-radius: 999px; }
+  .timer {
+    font-weight: 900; font-size: clamp(64px, 9vw, 104px); line-height: 1;
+    letter-spacing: -0.04em; text-align: center;
+    font-variant-numeric: tabular-nums;
+    animation: pulse 4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { filter: drop-shadow(0 0 28px rgba(158,82,245,.45)); } 50% { filter: drop-shadow(0 0 44px rgba(242,79,168,.5)); } }
+  .tc-track {
+    display: flex; align-items: center; gap: 12px; margin-top: 28px;
+    padding: 12px 14px; background: rgba(0,0,0,.25); border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .tc-art { width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
+  .tc-meta { min-width: 0; flex: 1; }
+  .tc-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tc-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tc-bars { display: flex; gap: 3px; align-items: flex-end; height: 22px; }
+  .tc-bars span { width: 3px; background: var(--accent); border-radius: 2px; animation: eq 1s ease-in-out infinite; }
+  .tc-bars span:nth-child(2){ animation-delay: .15s; } .tc-bars span:nth-child(3){ animation-delay: .3s; }
+  .tc-bars span:nth-child(4){ animation-delay: .45s; } .tc-bars span:nth-child(5){ animation-delay: .6s; }
+  @keyframes eq { 0%,100% { height: 6px; } 50% { height: 20px; } }
+
+  /* ---------- Section scaffolding ---------- */
+  section { padding: 84px 0; position: relative; }
+  .section-head { text-align: center; max-width: 640px; margin: 0 auto 56px; }
+  .section-head h2 { font-size: clamp(30px, 4vw, 44px); font-weight: 900; letter-spacing: -0.025em; margin: 0 0 14px; }
+  .section-head p { color: var(--muted); font-size: 18px; margin: 0; }
+  .kicker { color: var(--accent); font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; display: block; }
+
+  /* ---------- Video ---------- */
+  #film { background: linear-gradient(180deg, transparent, rgba(31,31,41,.35), transparent); }
+  .video-frame {
+    max-width: 960px; margin: 0 auto; border-radius: 20px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 50px 140px -40px rgba(0,0,0,.9), 0 0 80px -20px rgba(158,82,245,.25);
+    background: #000;
+  }
+  .video-frame video { display: block; width: 100%; height: auto; }
+
+  /* ---------- How it works ---------- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .step {
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--radius); padding: 32px 28px;
+  }
+  .step .num { font-size: 40px; font-weight: 900; line-height: 1; margin-bottom: 18px; }
+  .step h3 { font-size: 20px; margin: 0 0 8px; font-weight: 700; }
+  .step p { color: var(--muted); margin: 0; font-size: 15px; }
+
+  /* ---------- Features ---------- */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .feature {
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--radius); padding: 28px;
+    transition: transform .2s, border-color .2s, background .2s;
+  }
+  .feature:hover { transform: translateY(-4px); border-color: rgba(209,115,235,.4); background: var(--surface-2); }
+  .feature .ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 18px;
+    background: linear-gradient(135deg, rgba(158,82,245,.18), rgba(242,79,168,.18)); border: 1px solid rgba(209,115,235,.25); }
+  .feature .ico svg { width: 22px; height: 22px; stroke: var(--accent); }
+  .feature h3 { font-size: 17px; margin: 0 0 6px; font-weight: 700; }
+  .feature p { color: var(--muted); margin: 0; font-size: 14px; }
+
+  /* ---------- Showcase ---------- */
+  #showcase { background: linear-gradient(180deg, transparent, rgba(31,31,41,.3), transparent); }
+  .devices { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; max-width: 920px; margin: 0 auto; }
+  .device-col { text-align: center; }
+  .device-cap { font-weight: 700; font-size: 18px; margin-top: 18px; }
+  .device-sub { color: var(--muted); font-size: 14px; }
+
+  /* macOS window frame */
+  .mac {
+    background: var(--surface-2); border-radius: 16px; padding: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 40px 100px -30px rgba(0,0,0,.8);
+    max-width: 380px; margin: 0 auto;
+  }
+  .mac-bar { display: flex; gap: 6px; padding: 0 6px 10px; }
+  .mac-bar i { width: 11px; height: 11px; border-radius: 50%; display: block; background: #4a4a55; }
+  .mac-bar i:nth-child(1){ background:#ff5f57; } .mac-bar i:nth-child(2){ background:#febc2e; } .mac-bar i:nth-child(3){ background:#28c840; }
+  .mac img { width: 100%; display: block; border-radius: 8px; }
+
+  /* iPhone frame */
+  .phone {
+    background: #050507; border-radius: 44px; padding: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 40px 100px -30px rgba(0,0,0,.8), 0 0 60px -20px rgba(158,82,245,.3);
+    max-width: 260px; margin: 0 auto;
+    position: relative;
+  }
+  .phone::after { content:""; position:absolute; top:18px; left:50%; transform:translateX(-50%);
+    width:80px; height:22px; background:#050507; border-radius:14px; z-index:2; }
+  .phone img { width: 100%; display: block; border-radius: 36px; }
+
+  /* ---------- CTA band ---------- */
+  .cta-band {
+    margin: 0 24px; max-width: calc(var(--maxw) - 48px);
+    border-radius: 28px; padding: 64px 40px; text-align: center;
+    background: linear-gradient(135deg, rgba(158,82,245,.18), rgba(242,79,168,.14));
+    border: 1px solid rgba(209,115,235,.3);
+    position: relative; overflow: hidden;
+  }
+  .cta-band h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 900; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .cta-band p { color: var(--text); opacity: .8; margin: 0 0 28px; font-size: 18px; }
+
+  /* ---------- Footer ---------- */
+  footer { padding: 56px 0 40px; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 80px; }
+  .foot-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+  .foot-inner small { color: var(--muted); }
+
+  /* ---------- Reveal ---------- */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; }
+    .timer, .tc-bars span { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+    .timer-card { order: -1; max-width: 440px; }
+    .steps, .features { grid-template-columns: 1fr; }
+    .devices { grid-template-columns: 1fr; gap: 56px; }
+    .nav-links a:not(.nav-cta) { display: none; }
+    header { padding: 56px 0 40px; }
+    section { padding: 64px 0; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-inner">
+    <a class="brand grad-text" href="#">Plexodoro</a>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#showcase">Platforms</a>
+      <a class="nav-cta" href="https://github.com/fourseven/plexodoro" target="_blank" rel="noopener">Star on GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <div class="glow-bg"></div>
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><span class="dot"></span> Open source · macOS + iOS</span>
+      <h1>Pomodoro. <br /><span class="grad-text">But it picks the music.</span></h1>
+      <p class="lede">A focus timer that packs your Plex library into a playlist that hits your target length — to the minute. Pick a track. It builds the rest.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://github.com/fourseven/plexodoro" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.6 18 4.9 18 4.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+          Star on GitHub
+        </a>
+        <a class="btn btn-ghost" href="#film">Watch the film ↓</a>
+      </div>
+      <p class="fine">MIT licensed · Swift · No external accounts</p>
+    </div>
+
+    <div class="timer-card">
+      <div class="tc-top">
+        <span class="tc-label">Focus session</span>
+        <span class="tc-chip">Phase 2 · Packing</span>
+      </div>
+      <div class="timer grad-text" id="heroTimer">25:00</div>
+      <div class="tc-track">
+        <div class="tc-art"></div>
+        <div class="tc-meta">
+          <div class="tc-title">Supercut</div>
+          <div class="tc-sub">The Beths · 8 tracks queued</div>
+        </div>
+        <div class="tc-bars"><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="film">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">The 20-second tour</span>
+      <h2>See it packed</h2>
+      <p>Seed track in, a perfectly-sized focus session out.</p>
+    </div>
+    <div class="video-frame reveal">
+      <video controls preload="metadata" playsinline poster="screenshots/macos-menubar.png">
+        <source src="brag.mp4" type="video/mp4" />
+      </video>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">How it works</span>
+      <h2>Pick a track. We pack the rest.</h2>
+      <p>A two-phase engine builds a playlist that fills your focus block — engineered to the minute.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="num grad-text">01</div>
+        <h3>Seed it</h3>
+        <p>Search your Plex library and drop in one track to set the vibe.</p>
+      </div>
+      <div class="step reveal">
+        <div class="num grad-text">02</div>
+        <h3>It packs</h3>
+        <p>A lookahead-random then greedy-fill algorithm stacks tracks to hit your target duration — no awkward gaps.</p>
+      </div>
+      <div class="step reveal">
+        <div class="num grad-text">03</div>
+        <h3>You focus</h3>
+        <p>Audio is downloaded ahead and cached. Hit start, lock your screen, disappear into the work.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Features</span>
+      <h2>Built for deep work</h2>
+      <p>Native SwiftUI, shared <code>PlexodoroKit</code> core, no telemetry, no accounts.</p>
+    </div>
+    <div class="features">
+      <div class="feature reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <h3>Packs to the minute</h3>
+        <p>Two-phase packing nails your target session length instead of running long or cutting off.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v2M8 12v6M12 8v10M16 4v14M20 12v4"/></svg></div>
+        <h3>880 EQ presets</h3>
+        <p>Bundled AutoEQ presets (oratory1990 + Kazi) for ~880 headphones, with a hard-bypass toggle.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v7"/><path d="M3 15a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <h3>On-device cache</h3>
+        <p>A bounded LRU disk cache downloads tracks ahead of playback so sessions never stall.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg></div>
+        <h3>Background audio</h3>
+        <p>Playback survives screen lock, sleep, and route swaps on iOS via AVAudioSession handling.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg></div>
+        <h3>macOS menu bar</h3>
+        <p>Lives in your menu bar — timer, album art, volume, and controls a click away.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div>
+        <h3>iOS in your pocket</h3>
+        <p>The same core on iPhone — a shared <code>PlexodoroKit</code> keeps both apps in lockstep.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="showcase">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Platforms</span>
+      <h2>macOS menu bar. iOS in your pocket.</h2>
+      <p>One core, two native surfaces.</p>
+    </div>
+    <div class="devices">
+      <div class="device-col reveal">
+        <div class="mac">
+          <div class="mac-bar"><i></i><i></i><i></i></div>
+          <img src="screenshots/macos-menubar.png" alt="Plexodoro running as a macOS menu bar dropdown" loading="lazy" />
+        </div>
+        <div class="device-cap grad-text">macOS</div>
+        <div class="device-sub">Menu-bar dropdown · lives out of the way</div>
+      </div>
+      <div class="device-col reveal">
+        <div class="phone">
+          <img src="screenshots/ios-session.png" alt="Plexodoro running an active focus session on iOS" loading="lazy" />
+        </div>
+        <div class="device-cap grad-text">iOS</div>
+        <div class="device-sub">Full-screen session · background audio</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2>Focus, scored by your library.</h2>
+      <p>Open source, MIT licensed, no sign-ups.</p>
+      <a class="btn btn-primary" href="https://github.com/fourseven/plexodoro" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.6 18 4.9 18 4.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <a class="brand grad-text" href="#">Plexodoro</a><br />
+      <small>Open source · MIT · macOS + iOS</small>
+    </div>
+    <small><a href="https://github.com/fourseven/plexodoro" target="_blank" rel="noopener">GitHub</a> · <a href="#film">Film</a> · Built with SwiftUI</small>
+  </div>
+</footer>
+
+<script>
+  // Countdown timer in the hero card
+  (function () {
+    var el = document.getElementById('heroTimer');
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var total = 25 * 60;
+    function tick() {
+      var m = Math.floor(total / 60), s = total % 60;
+      el.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      total = total > 0 ? total - 1 : 25 * 60;
+    }
+    tick();
+    setInterval(tick, 1000);
+  })();
+
+  // Scroll reveal
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+      });
+    }, { threshold: 0.12 });
+    els.forEach(function (e) { io.observe(e); });
+  })();
+</script>
+</body>
+</html>

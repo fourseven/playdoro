@@ -20,8 +20,8 @@
     --surface: #1F1F29;
     --surface-2: #2E2E3D;
     --accent: #D173EB;
-    --grad-a: #9E52F5;
-    --grad-b: #F24FA8;
+    --grad-a: #7C3AED;
+    --grad-b: #DB2777;
     --text: #F5F5F7;
     --muted: #9A9AAD;
     --maxw: 1120px;
@@ -129,17 +129,11 @@
     -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
   }
   .tc-art {
-    width: 100%; aspect-ratio: 1 / 1; border-radius: 16px; position: relative; overflow: hidden;
-    background: linear-gradient(135deg, #c026d3, #ec4899);
-    box-shadow: 0 16px 40px -14px rgba(236,72,153,.55);
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 16px; overflow: hidden;
+    background: #241a3d;
+    box-shadow: 0 16px 40px -14px rgba(236,72,153,.5);
   }
-  .tc-art::before { content:""; position:absolute; inset:0; background: radial-gradient(120% 110% at 22% 16%, rgba(255,255,255,.28), transparent 55%); }
-  .tc-art::after {
-    content:""; position:absolute; left:50%; top:50%; width:54%; height:54%; border-radius:50%;
-    transform: translate(-50%,-50%);
-    background: radial-gradient(circle, rgba(255,255,255,.9) 0 8%, transparent 9%), rgba(0,0,0,.42);
-    box-shadow: inset 0 0 0 2px rgba(255,255,255,.16);
-  }
+  .tc-art svg { display: block; width: 100%; height: 100%; }
   .tc-timer {
     margin-top: 20px;
     font-weight: 800; font-size: 64px; line-height: 1; letter-spacing: -0.03em;
@@ -303,6 +297,7 @@
   </div>
 </nav>
 
+<main>
 <header>
   <div class="glow-bg"></div>
   <div class="wrap hero-grid">
@@ -321,7 +316,21 @@
     </div>
 
     <div class="timer-card">
-      <div class="tc-art" aria-hidden="true"></div>
+      <div class="tc-art" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="sleeve" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#9E52F5"/>
+            <stop offset="1" stop-color="#F24FA8"/>
+          </linearGradient>
+        </defs>
+        <rect width="100" height="100" fill="url(#sleeve)"/>
+        <circle cx="95" cy="4" r="30" fill="#ffffff" opacity="0.10"/>
+        <circle cx="95" cy="4" r="30" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="0.7"/>
+        <text x="9" y="60" font-family="Inter, sans-serif" font-size="4.5" font-weight="700" letter-spacing="1.5" fill="#ffffff" fill-opacity="0.85">VARIOUS ARTISTS</text>
+        <rect x="9" y="65" width="20" height="1.4" fill="#ffffff" opacity="0.5"/>
+        <text x="8.5" y="89" font-family="Inter, sans-serif" font-size="21" font-weight="800" letter-spacing="-0.7" fill="#ffffff">Supercut</text>
+        <text x="91" y="12" text-anchor="end" font-family="Inter, sans-serif" font-size="3" font-weight="600" letter-spacing="1.2" fill="#ffffff" fill-opacity="0.75">PRXD • 001</text>
+      </svg></div>
       <div class="tc-timer" id="heroTimer">25:00</div>
       <div class="tc-status">In progress</div>
       <div class="tc-now">
@@ -473,6 +482,7 @@
     </div>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap foot-inner">

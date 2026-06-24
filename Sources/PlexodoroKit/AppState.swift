@@ -117,6 +117,7 @@ class AppState: ObservableObject {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKey.serverURL)
         UserDefaults.standard.removeObject(forKey: UserDefaultsKey.plexToken)
         UserDefaults.standard.removeObject(forKey: UserDefaultsKey.serverName)
+        CertDelegate.clearAllStoredPins()
     }
 
     private func verifySavedConnection(token: String) {

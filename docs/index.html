@@ -160,13 +160,17 @@
   .tc-times { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #8a8a98; font-variant-numeric: tabular-nums; }
   .tc-vol { display: flex; align-items: center; gap: 10px; margin-top: 14px; color: #8a8a98; }
   .tc-vol svg { width: 15px; height: 15px; flex-shrink: 0; }
-  .tc-vol-bar { flex: 1; height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); position: relative; }
-  .tc-vol-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 62%; border-radius: 999px; background: rgba(255,255,255,.7); }
+  .tc-vol-bar { --vol: 62%; -webkit-appearance: none; appearance: none; flex: 1; height: 4px; border-radius: 999px; background: transparent; cursor: pointer; }
+  .tc-vol-bar::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, #fff 0 var(--vol), rgba(255,255,255,.12) var(--vol) 100%); }
+  .tc-vol-bar::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin-top: -4.5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .tc-vol-bar::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); }
+  .tc-vol-bar::-moz-range-progress { height: 4px; border-radius: 999px; background: #fff; }
+  .tc-vol-bar::-moz-range-thumb { width: 13px; height: 13px; border: none; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
   .tc-controls { display: flex; justify-content: center; gap: 20px; margin-top: 18px; }
-  .tc-btn { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; }
+  .tc-btn { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; font: inherit; }
   .tc-btn svg { width: 20px; height: 20px; }
   .tc-stop { background: #2a2a38; border: 1px solid rgba(255,255,255,.08); color: #cfcfdc; }
-  .tc-play { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); color: #fff; box-shadow: 0 12px 30px -8px rgba(242,79,168,.6); }
+  .tc-play { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); color: #fff; border: none; box-shadow: 0 12px 30px -8px rgba(242,79,168,.6); }
   .tc-upnext {
     margin-top: 18px; padding: 14px; border-radius: 14px;
     background: #101019; border: 1px solid rgba(255,255,255,.06);
@@ -327,14 +331,14 @@
         <div class="tc-bar"><i></i></div>
         <div class="tc-times"><span>0:06</span><span>&minus;3:19</span></div>
       </div>
-      <div class="tc-vol" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/></svg>
-        <div class="tc-vol-bar"><i></i></div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6a8 8 0 0 1 0 12"/></svg>
+      <div class="tc-vol">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/></svg>
+        <input type="range" min="0" max="100" value="62" class="tc-vol-bar" id="tcVol" aria-label="Volume" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6a8 8 0 0 1 0 12"/></svg>
       </div>
       <div class="tc-controls">
-        <div class="tc-btn tc-stop" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>
-        <div class="tc-btn tc-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
+        <button type="button" class="tc-btn tc-stop" id="tcStop" aria-label="Reset timer"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+        <button type="button" class="tc-btn tc-play" id="tcToggle" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
       </div>
       <div class="tc-upnext">
         <div class="tc-un-head"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Up next · 8 tracks</span></div>
@@ -480,18 +484,40 @@
 </footer>
 
 <script>
-  // Countdown timer in the hero card
+  // Countdown timer + controls in the hero card
   (function () {
     var el = document.getElementById('heroTimer');
-    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var toggle = document.getElementById('tcToggle');
+    var stopBtn = document.getElementById('tcStop');
+    var vol = document.getElementById('tcVol');
+    if (!el) return;
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var total = 25 * 60;
-    function tick() {
-      var m = Math.floor(total / 60), s = total % 60;
-      el.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
-      total = total > 0 ? total - 1 : 25 * 60;
+    var running = false;
+    var timer = null;
+    var PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+    var PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    function fmt() { var m = Math.floor(total / 60), s = total % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+    function render() { el.textContent = fmt(); }
+    function setRunning(v) {
+      running = v;
+      clearInterval(timer); timer = null;
+      if (v) {
+        timer = setInterval(function () { total = total > 0 ? total - 1 : 25 * 60; render(); }, 1000);
+        toggle.innerHTML = PAUSE; toggle.setAttribute('aria-label', 'Pause');
+      } else {
+        toggle.innerHTML = PLAY; toggle.setAttribute('aria-label', 'Play');
+      }
     }
-    tick();
-    setInterval(tick, 1000);
+    render();
+    setRunning(!reduced);
+    toggle.addEventListener('click', function () { setRunning(!running); });
+    stopBtn.addEventListener('click', function () { total = 25 * 60; render(); setRunning(false); });
+    if (vol) {
+      var syncVol = function () { vol.style.setProperty('--vol', vol.value + '%'); };
+      syncVol();
+      vol.addEventListener('input', syncVol);
+    }
   })();
 
   // Scroll reveal

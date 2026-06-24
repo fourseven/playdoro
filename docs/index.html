@@ -59,8 +59,8 @@
   .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
   .brand { font-weight: 900; font-size: 20px; letter-spacing: -0.02em; text-decoration: none; }
   .nav-links { display: flex; align-items: center; gap: 28px; }
-  .nav-links a { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color .2s; }
-  .nav-links a:hover { color: var(--text); }
+  .nav-links a:not(.nav-cta) { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; transition: color .2s; }
+  .nav-links a:not(.nav-cta):hover { color: var(--text); }
   .nav-cta {
     padding: 8px 16px; border-radius: 999px;
     background: linear-gradient(120deg, var(--grad-a), var(--grad-b));

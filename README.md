@@ -8,6 +8,12 @@ ahead of time so playback never stalls.
 Runs as a **macOS menu-bar app** and an **iOS app** from a single Swift
 codebase (`PlexodoroKit`).
 
+## Screenshots
+
+| macOS menu bar | iOS active session |
+| :---: | :---: |
+| ![macOS menu bar](docs/screenshots/macos-menubar.png) | ![iOS active session](docs/screenshots/ios-session.png) |
+
 ## Features
 
 - **Pomodoro engine** — two-phase track-packing algorithm (lookahead random +

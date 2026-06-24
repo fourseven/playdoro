@@ -1,6 +1,6 @@
 # Plexodoro
 
-macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback (Spotify support planned).
+macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
 
 ## Build & Test
 
@@ -31,7 +31,7 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
 
 - **Entrypoint:** `Sources/PlexodoroKit/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS). Both apps (`Sources/Plexodoro/main.swift` and `iOSApp/Plexodoro/main.swift`) just call `PlexodoroApp.main()` from PlexodoroKit.
 - **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicProvider` + `AudioPlayer` directly
-- **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (Plex/Spotify interchangeable)
+- **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (provider-agnostic; other backends could be added)
 - **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicProvider`) — Plex HTTP API with self-signed cert support via `CertDelegate`
 - **Audio:** `AudioPlayer` (`@MainActor`) — wraps `AVAudioEngine` + `AVAudioPlayerNode`, downloads tracks via `TrackCache` before playback. On iOS, handles `AVAudioSession` interruptions and `AVAudioEngine` configuration changes so playback survives screen lock, sleep, and audio route swaps.
 - **EQ:** `AudioEQ` — manages `AVAudioUnitEQ`, applies AutoEQ presets, supports hard-bypass toggle that remembers the selected preset. Catalog of ~880 presets from oratory1990 + Kazi is bundled as text resources and parsed at startup by `EQPresetLoader`.
@@ -40,9 +40,9 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
 
 ### Modularisation Direction
 
-Music provider is now a protocol so Plex/Spotify are interchangeable:
+Music provider is a protocol so the backend is swappable:
 - `MusicProvider` protocol (search, getTrack, getNearest, getStreamURL)
-- `PlexClient` conforms; `SpotifyClient` is new conformance
+- `PlexClient` conforms
 - `AppState` references `MusicProvider` instead of `PlexClient`
 - `Track` is already generic (id, title, artist, album, duration, score) — `PomodoroEngine` and `AudioPlayer` are already provider-agnostic
 

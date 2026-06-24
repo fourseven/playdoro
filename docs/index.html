@@ -113,45 +113,68 @@
   .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
   .fine { color: var(--muted); font-size: 13px; margin-left: 4px; }
 
-  /* hero timer card */
+  /* hero timer card — recreates the macOS menu-bar session dropdown */
   .timer-card {
     position: relative;
-    background: linear-gradient(160deg, var(--surface), rgba(31,31,41,.5));
+    width: 100%; max-width: 380px; margin: 0 auto;
+    background: #14141d;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 28px; padding: 44px 40px 36px;
+    border-radius: 24px; padding: 18px;
     box-shadow: 0 40px 120px -30px rgba(0,0,0,.8);
   }
   .timer-card::before {
-    content: ""; position: absolute; inset: -1px; border-radius: 28px; padding: 1px;
-    background: linear-gradient(160deg, rgba(158,82,245,.5), transparent 50%, rgba(242,79,168,.4));
+    content: ""; position: absolute; inset: -1px; border-radius: 24px; padding: 1px;
+    background: linear-gradient(165deg, rgba(158,82,245,.45), transparent 45%, rgba(242,79,168,.35));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
   }
-  .tc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
-  .tc-label { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
-  .tc-chip { font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(209,115,235,.12); padding: 4px 10px; border-radius: 999px; }
-  .timer {
-    font-weight: 900; font-size: clamp(64px, 9vw, 104px); line-height: 1;
-    letter-spacing: -0.04em; text-align: center;
-    font-variant-numeric: tabular-nums;
-    animation: pulse 4s ease-in-out infinite;
+  .tc-art {
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 16px; position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #c026d3, #ec4899);
+    box-shadow: 0 16px 40px -14px rgba(236,72,153,.55);
   }
-  @keyframes pulse { 0%,100% { filter: drop-shadow(0 0 28px rgba(158,82,245,.45)); } 50% { filter: drop-shadow(0 0 44px rgba(242,79,168,.5)); } }
-  .tc-track {
-    display: flex; align-items: center; gap: 12px; margin-top: 28px;
-    padding: 12px 14px; background: rgba(0,0,0,.25); border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.05);
+  .tc-art::before { content:""; position:absolute; inset:0; background: radial-gradient(120% 110% at 22% 16%, rgba(255,255,255,.28), transparent 55%); }
+  .tc-art::after {
+    content:""; position:absolute; left:50%; top:50%; width:54%; height:54%; border-radius:50%;
+    transform: translate(-50%,-50%);
+    background: radial-gradient(circle, rgba(255,255,255,.9) 0 8%, transparent 9%), rgba(0,0,0,.42);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.16);
   }
-  .tc-art { width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
-    background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
-  .tc-meta { min-width: 0; flex: 1; }
-  .tc-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tc-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tc-bars { display: flex; gap: 3px; align-items: flex-end; height: 22px; }
-  .tc-bars span { width: 3px; background: var(--accent); border-radius: 2px; animation: eq 1s ease-in-out infinite; }
-  .tc-bars span:nth-child(2){ animation-delay: .15s; } .tc-bars span:nth-child(3){ animation-delay: .3s; }
-  .tc-bars span:nth-child(4){ animation-delay: .45s; } .tc-bars span:nth-child(5){ animation-delay: .6s; }
-  @keyframes eq { 0%,100% { height: 6px; } 50% { height: 20px; } }
+  .tc-timer {
+    margin-top: 20px;
+    font-weight: 800; font-size: 64px; line-height: 1; letter-spacing: -0.03em;
+    text-align: center; color: #fff; font-variant-numeric: tabular-nums;
+  }
+  .tc-status {
+    text-align: center; margin-top: 12px;
+    color: #8a8a98; font-size: 11px; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase;
+  }
+  .tc-now { text-align: center; margin-top: 18px; }
+  .tc-title { font-weight: 600; font-size: 16px; }
+  .tc-artist { color: #9a9aad; font-size: 13px; margin-top: 3px; }
+  .tc-seek { margin-top: 18px; }
+  .tc-bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.12); position: relative; }
+  .tc-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 5%; border-radius: 999px; background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); }
+  .tc-bar i::after { content:""; position: absolute; right: -5px; top: 50%; width: 11px; height: 11px; border-radius: 50%; background: #fff; transform: translateY(-50%); box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+  .tc-times { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #8a8a98; font-variant-numeric: tabular-nums; }
+  .tc-vol { display: flex; align-items: center; gap: 10px; margin-top: 14px; color: #8a8a98; }
+  .tc-vol svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .tc-vol-bar { flex: 1; height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); position: relative; }
+  .tc-vol-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 62%; border-radius: 999px; background: rgba(255,255,255,.7); }
+  .tc-controls { display: flex; justify-content: center; gap: 20px; margin-top: 18px; }
+  .tc-btn { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; }
+  .tc-btn svg { width: 20px; height: 20px; }
+  .tc-stop { background: #2a2a38; border: 1px solid rgba(255,255,255,.08); color: #cfcfdc; }
+  .tc-play { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); color: #fff; box-shadow: 0 12px 30px -8px rgba(242,79,168,.6); }
+  .tc-upnext {
+    margin-top: 18px; padding: 14px; border-radius: 14px;
+    background: #101019; border: 1px solid rgba(255,255,255,.06);
+  }
+  .tc-un-head { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #8a8a98; }
+  .tc-un-head svg { width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px; }
+  .tc-un-title { font-weight: 600; font-size: 14px; margin-top: 9px; }
+  .tc-un-artist { color: #9a9aad; font-size: 12px; margin-top: 2px; }
 
   /* ---------- Section scaffolding ---------- */
   section { padding: 84px 0; position: relative; }
@@ -246,7 +269,6 @@
   .reveal.in { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; }
-    .timer, .tc-bars span { animation: none; }
     html { scroll-behavior: auto; }
   }
 
@@ -294,18 +316,30 @@
     </div>
 
     <div class="timer-card">
-      <div class="tc-top">
-        <span class="tc-label">Focus session</span>
-        <span class="tc-chip">Phase 2 · Packing</span>
+      <div class="tc-art" aria-hidden="true"></div>
+      <div class="tc-timer" id="heroTimer">25:00</div>
+      <div class="tc-status">In progress</div>
+      <div class="tc-now">
+        <div class="tc-title">Supercut</div>
+        <div class="tc-artist">Various Artists</div>
       </div>
-      <div class="timer grad-text" id="heroTimer">25:00</div>
-      <div class="tc-track">
-        <div class="tc-art"></div>
-        <div class="tc-meta">
-          <div class="tc-title">Supercut</div>
-          <div class="tc-sub">The Beths · 8 tracks queued</div>
-        </div>
-        <div class="tc-bars"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="tc-seek">
+        <div class="tc-bar"><i></i></div>
+        <div class="tc-times"><span>0:06</span><span>&minus;3:19</span></div>
+      </div>
+      <div class="tc-vol" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/></svg>
+        <div class="tc-vol-bar"><i></i></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6a8 8 0 0 1 0 12"/></svg>
+      </div>
+      <div class="tc-controls">
+        <div class="tc-btn tc-stop" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>
+        <div class="tc-btn tc-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
+      </div>
+      <div class="tc-upnext">
+        <div class="tc-un-head"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Up next · 8 tracks</span></div>
+        <div class="tc-un-title">walking the cow</div>
+        <div class="tc-un-artist">Various Artists</div>
       </div>
     </div>
   </div>

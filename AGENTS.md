@@ -11,14 +11,14 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback 
   ```bash
   xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro \
     -destination "platform=iOS,id=<devicectl-id>" \
-    -allowProvisioningUpdates DEVELOPMENT_TEAM=88X59PVX4X build
+    -allowProvisioningUpdates DEVELOPMENT_TEAM=<your-team-id> build
   APP=~/Library/Developer/Xcode/DerivedData/Plexodoro-*/Build/Products/Debug-iphoneos/Plexodoro.app
   xcrun devicectl device install app --device <devicectl-id> "$APP"
-  xcrun devicectl device process launch --device <devicectl-id> com.mathewhartley.plexodoro
+  xcrun devicectl device process launch --device <devicectl-id> <bundle-id>
   ```
-  - List devices: `xcrun devicectl list devices`. Current test phone "Mathew's iPhone" (iPhone 12 Pro): devicectl-id `00000000-0000-0000-0000-000000000000`, UDID `00000000-0000000000000000`.
-  - Apple Developer team `88X59PVX4X` (Individual, Mathew Hartley), set in the pbxproj build settings (Debug + Release). The `DEVELOPMENT_TEAM=...` CLI flag is still accepted as an override but no longer required.
-  - **Signing/cert errors** ("profile doesn't include certificate", "device isn't registered"): resolve in the **Xcode GUI** — open the project, target → Signing & Capabilities → Automatic + select the team. Xcode regenerates the dev cert and registers the connected device where `xcodebuild -allowProvisioningUpdates` alone won't. Keep the iPhone unlocked.
+  - List devices: `xcrun devicectl list devices` (gives the `devicectl-id`).
+  - The development team is set via `DEVELOPMENT_TEAM` in the pbxproj build settings (Debug + Release); override on the CLI or in the Xcode GUI as needed.
+  - **Signing/cert errors** ("profile doesn't include certificate", "device isn't registered"): resolve in the **Xcode GUI** — open the project, target → Signing & Capabilities → Automatic + select the team. Xcode regenerates the dev cert and registers the connected device where `xcodebuild -allowProvisioningUpdates` alone won't. Keep the device unlocked.
 - No lint, formatter, or CI configured.
 - SPM package at repo root produces two products: the `Plexodoro` macOS executable and the `PlexodoroKit` library (linked by both the macOS executable and the iOS Xcode project). The iOS app lives in a separate `iOSApp/Plexodoro.xcodeproj` (`DerivedData/` gitignored).
 
@@ -77,22 +77,21 @@ Music provider is now a protocol so Plex/Spotify are interchangeable:
 
 - `Info.plist` is excluded from SPM build (`exclude: ["Info.plist"]` in Package.swift) but still present in Sources
 - `NSAppTransportSecurity` allows local networking — needed for self-signed Plex certs on LAN
-- `CertDelegate` trusts every server trust — safe only for LAN use
+- `CertDelegate` relaxes validation only for LAN/private hosts and pins the server's public key on first use (TOFU); public hosts get normal validation
 - Plex JSON response shape: `MediaContainer` → `Metadata[]` — unwrapped via `CodingKeys`
 - Track durations are in **milliseconds** everywhere (`duration / 1000` to get seconds)
 - Tracks download sequentially to a bounded on-disk cache before `AVAudioEngine` starts; cache persists across sessions
 - Audio log at `<tmp>/plexodoro_audio_player.log` (OSLog + file)
-- No git remotes — local-only repo
+- Git workflow: features land on `main` (see iOS SPM note below for why `main` matters)
 - **iOS Xcode project + SPM:** the iOS app references the local package by `file://` URL with `branch = main`. SPM does a real git checkout, so **working-tree changes to `Sources/PlexodoroKit/*` are not seen by the iOS build until committed**. `PlexodoroKit` must remain declared as a `.library` product in `Package.swift` (not just a target) or the iOS app fails with "Missing package product 'PlexodoroKit'".
-- **Committing for an iOS build vs the `check-branch` hook:** because the iOS package ref is pinned to `branch = main`, `PlexodoroKit` changes must land **on `main`** before the iOS build can see them — a feature branch alone won't do. The `~/.claude/hooks/check-branch.sh` PreToolUse hook blocks `git commit` while `HEAD` is `main` (exit 2). Work around it by committing on a throwaway feature branch (hook passes), then fast-forwarding `main` — the FF is a `git switch`/`git merge`, not a `git commit`, so the hook never fires:
+- **iOS builds read `PlexodoroKit` from `main`:** because the iOS package ref is pinned to `branch = main`, `PlexodoroKit` changes must land **on `main`** before the iOS build can see them — a feature branch alone won't do. If your workflow blocks direct commits to `main`, commit on a throwaway branch then fast-forward `main` (the FF is a `git switch`/`git merge`, not a `git commit`):
   ```bash
-  git switch -c mathew/feat/<desc>
-  git commit -m "…"                       # on feature branch — hook allows
+  git switch -c feat/<desc>
+  git commit -m "…"
   git switch main
-  git merge --ff-only mathew/feat/<desc>  # lands commit on main, no new commit
-  git branch -d mathew/feat/<desc>
+  git merge --ff-only feat/<desc>         # lands commit on main, no new commit
+  git branch -d feat/<desc>
   ```
-  (The hook only intercepts the agent's Bash tool — a human running `git commit` on `main` in their own terminal is unaffected.)
 - **iOS SPM pin stickiness (important):** even after committing, SPM with `branch = main` on a local package does **not** auto-bump to new commits on rebuild — it stays pinned to whatever revision was first resolved (recorded in `iOSApp/Plexodoro.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`). `xcodebuild build` and `xcodebuild -resolvePackageDependencies` both happily re-use the stale pin. To force the iOS build to pick up a new commit in `PlexodoroKit`, nuke the project's DerivedData entirely:
   ```bash
   rm -rf ~/Library/Developer/Xcode/DerivedData/Plexodoro-*

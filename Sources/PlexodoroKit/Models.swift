@@ -33,6 +33,38 @@ func mergeNearestResults(_ batches: [[Track]]) -> [Track] {
     return out
 }
 
+/// Relevance weight for a single search hit. Used by `PlexClient.searchTracks`
+/// to rank results: an exact (case-insensitive) title match beats a prefix
+/// match, which beats a substring match, which beats an artist/album-only hit.
+/// Pure so it can be unit-tested without hitting the network.
+func trackMatchScore(_ track: Track, query: String) -> Int {
+    let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+    guard !q.isEmpty else { return 1 }
+    let title = track.title.lowercased()
+    if title == q { return 100 }
+    if title.hasPrefix(q) { return 60 }
+    if title.contains(q) { return 30 }
+    return 1
+}
+
+/// Score and merge raw search batches into an id-keyed map, summing each
+/// track's relevance weight across every batch it appears in. Pure helper for
+/// `PlexClient.searchTracks`.
+func scoreSearchBatches(_ batches: [[Track]], query: String) -> [String: (track: Track, score: Int)] {
+    var scored: [String: (track: Track, score: Int)] = [:]
+    for batch in batches {
+        for track in batch {
+            let weight = trackMatchScore(track, query: query)
+            if let existing = scored[track.id] {
+                scored[track.id] = (track, existing.score + weight)
+            } else {
+                scored[track.id] = (track, weight)
+            }
+        }
+    }
+    return scored
+}
+
 struct Track: Identifiable, Equatable, Codable {
     let id: String
     let title: String

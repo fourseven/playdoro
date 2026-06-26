@@ -31,3 +31,45 @@ final class PlexClientTests: XCTestCase {
         XCTAssertTrue(absolute.contains("X-Plex-Token=tok%3Den"), "Expected '=' in token to be encoded in: \(absolute)")
     }
 }
+
+final class SearchScoringTests: XCTestCase {
+    private func make(_ title: String, id: String = "1") -> Track {
+        Track(id: id, title: title, artist: "A", album: "B", duration: 0, key: "", thumb: nil, score: nil)
+    }
+
+    func testExactTitleMatchScoresHighest() {
+        XCTAssertEqual(trackMatchScore(make("stupid song"), query: "stupid song"), 100)
+        XCTAssertEqual(trackMatchScore(make("Stupid Song"), query: "stupid song"), 100)
+    }
+
+    func testPrefixMatchBeatsSubstring() {
+        XCTAssertEqual(trackMatchScore(make("stupid song (demo)"), query: "stupid song"), 60)
+    }
+
+    func testSubstringMatchBeatsArtistOnly() {
+        XCTAssertEqual(
+            trackMatchScore(make("...This Stupid Song Written About Me"), query: "stupid song"),
+            30
+        )
+    }
+
+    func testNonTitleMatchScoresBaseline() {
+        XCTAssertEqual(trackMatchScore(make("completely unrelated"), query: "stupid song"), 1)
+    }
+
+    func testEmptyQueryScoresBaseline() {
+        XCTAssertEqual(trackMatchScore(make("anything"), query: "   "), 1)
+    }
+
+    func testScoredBatchesRankExactMatchAboveSubstring() {
+        // Simulates the bug scenario: an exact "stupid song" track and a
+        // substring "...Stupid Song..." track both returned across batches.
+        let exact = make("stupid song", id: "olivia")
+        let substring = make("I Slept With Someone (Stupid Song)", id: "fob")
+        let scored = scoreSearchBatches([[exact, substring], [exact]], query: "stupid song")
+
+        let ranked = scored.values.sorted { $0.score > $1.score }
+        XCTAssertEqual(ranked.first?.track.id, "olivia", "Exact title match should outrank a substring match")
+        XCTAssertGreaterThan(ranked[0].score, ranked[1].score)
+    }
+}

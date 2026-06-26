@@ -115,40 +115,38 @@ actor PlexClient: MusicProvider {
     }
 
     func searchTracks(query: String, limit: Int = 20) async throws -> [Track] {
-        log.debug("Searching: '\(query)'")
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+        log.debug("Searching: '\(trimmed)'")
 
         let sectionIDs = try await musicSectionIDs()
-        let tokens = query.split(separator: " ").map(String.init).filter { !$0.isEmpty }
-        let searchTerms = tokens.count > 1 ? Array(Set(tokens)) : [query]
         let perSearchLimit = 50
 
-        let batches: [[Track]] = try await withThrowingTaskGroup(of: [Track].self) { group in
-            for sectionID in sectionIDs {
-                for term in searchTerms {
-                    group.addTask { [self] in
-                        try await self.searchInSection(sectionID: sectionID, field: "title", value: term, limit: perSearchLimit)
-                    }
-                    group.addTask { [self] in
-                        try await self.searchInSection(sectionID: sectionID, field: "artist.title", value: term, limit: perSearchLimit)
-                    }
-                }
-            }
-            var results: [[Track]] = []
-            for try await batch in group {
-                results.append(batch)
-            }
-            return results
-        }
+        // Primary: full-phrase search. Plex matches the whole query as a
+        // (case-insensitive) substring, so "stupid song" hits the literal title
+        // rather than every track containing the word "song". The global
+        // /search endpoint also covers artist/album matches with Plex's own
+        // relevance ranking.
+        let phraseBatches = try await runFieldSearches(
+            terms: [trimmed],
+            sectionIDs: sectionIDs,
+            includeGlobal: true,
+            perSearchLimit: perSearchLimit
+        )
+        var scored = scoreSearchBatches(phraseBatches, query: trimmed)
 
-        var scored: [String: (track: Track, score: Int)] = [:]
-        for batch in batches {
-            for track in batch {
-                if let existing = scored[track.id] {
-                    scored[track.id] = (track, existing.score + 1)
-                } else {
-                    scored[track.id] = (track, 1)
-                }
-            }
+        // Fallback: a reordered/partial query (e.g. "song stupid") won't match
+        // as a phrase, so fall back to per-token field searches so partial
+        // matches still surface.
+        if scored.isEmpty {
+            let tokens = Array(Set(trimmed.split(separator: " ").map(String.init)))
+            let tokenBatches = try await runFieldSearches(
+                terms: tokens,
+                sectionIDs: sectionIDs,
+                includeGlobal: false,
+                perSearchLimit: perSearchLimit
+            )
+            scored = scoreSearchBatches(tokenBatches, query: trimmed)
         }
 
         return scored.values
@@ -185,6 +183,57 @@ actor PlexClient: MusicProvider {
         )
         let container = try decodeContainer(from: data)
         return (container.metadata ?? []).map { $0.toTrack }
+    }
+
+    /// Runs `title` + `artist.title` field searches for every (term × section),
+    /// plus one global full-text `/search` per term when `includeGlobal` is set.
+    /// All requests fire concurrently; results come back as raw per-query batches.
+    private func runFieldSearches(
+        terms: [String],
+        sectionIDs: [Int],
+        includeGlobal: Bool,
+        perSearchLimit: Int
+    ) async throws -> [[Track]] {
+        try await withThrowingTaskGroup(of: [Track].self) { group in
+            if includeGlobal {
+                for term in terms {
+                    group.addTask { [self] in
+                        try await self.globalSearch(query: term, limit: perSearchLimit)
+                    }
+                }
+            }
+            for sectionID in sectionIDs {
+                for term in terms {
+                    group.addTask { [self] in
+                        try await self.searchInSection(sectionID: sectionID, field: "title", value: term, limit: perSearchLimit)
+                    }
+                    group.addTask { [self] in
+                        try await self.searchInSection(sectionID: sectionID, field: "artist.title", value: term, limit: perSearchLimit)
+                    }
+                }
+            }
+            var results: [[Track]] = []
+            for try await batch in group { results.append(batch) }
+            return results
+        }
+    }
+
+    /// Plex's library-wide full-text search (`/search?query=`). Searches across
+    /// title/artist/album with Plex's own relevance ranking. Filtered to tracks
+    /// only, since the endpoint returns every metadata type (movies, shows, …).
+    private func globalSearch(query: String, limit: Int) async throws -> [Track] {
+        let data = try await fetchJSON(
+            path: "/search",
+            query: [
+                URLQueryItem(name: "type", value: "10"),
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "limit", value: String(limit))
+            ]
+        )
+        let container = try decodeContainer(from: data)
+        return (container.metadata ?? [])
+            .filter { $0.type == "track" }
+            .map { $0.toTrack }
     }
 
     func getNearest(trackId: String, limit: Int = 50) async throws -> [Track] {

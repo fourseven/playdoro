@@ -262,6 +262,53 @@ final class DeduplicateTests: XCTestCase {
         let result = deduplicate(tracks: [])
         XCTAssertTrue(result.isEmpty)
     }
+
+    /// Regression: the same song returned by Plex with different ids (e.g. it
+    /// lives on both a studio album and a compilation, or in two libraries)
+    /// must collapse to a single playlist entry. Pre-fix `deduplicate` keyed on
+    /// `id-title-artist`, so distinct ids kept both copies and the packed
+    /// playlist contained the same song twice.
+    func testDeduplicateSameSongDifferentIdAndAlbum() {
+        let studio = Track(
+            id: "1", title: "Song A", artist: "Artist",
+            album: "Studio Album", duration: 180_000,
+            key: "/library/metadata/1", thumb: nil, score: nil
+        )
+        let compilation = Track(
+            id: "2", title: "Song A", artist: "Artist",
+            album: "Greatest Hits", duration: 180_000,
+            key: "/library/metadata/2", thumb: nil, score: nil
+        )
+        let other = Track(
+            id: "3", title: "Song B", artist: "Artist",
+            album: "Studio Album", duration: 180_000,
+            key: "/library/metadata/3", thumb: nil, score: nil
+        )
+
+        let result = deduplicate(tracks: [studio, compilation, other])
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result.map(\.title), ["Song A", "Song B"])
+    }
+
+    /// Trivial metadata drift (case, surrounding whitespace) must not defeat
+    /// song-level dedup. Plex tags are not always consistent across albums.
+    func testDeduplicateNormalizesCaseAndWhitespace() {
+        let a = Track(
+            id: "1", title: " Song A ", artist: "Artist",
+            album: "Album", duration: 180_000,
+            key: "", thumb: nil, score: nil
+        )
+        let b = Track(
+            id: "2", title: "song a", artist: " artist ",
+            album: "Album", duration: 180_000,
+            key: "", thumb: nil, score: nil
+        )
+
+        let result = deduplicate(tracks: [a, b])
+
+        XCTAssertEqual(result.count, 1)
+    }
 }
 
 final class ErrorDescriptionTests: XCTestCase {

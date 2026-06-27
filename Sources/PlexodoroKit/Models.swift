@@ -11,9 +11,19 @@ enum UserDefaultsKey {
     static let variety = "variety"
 }
 
+/// Dedupe by *song* identity (normalized title + artist), not by Plex's
+/// rating-key `id`. The same song can surface multiple times from Plex's
+/// nearest-neighbour endpoint when it lives on more than one album/library
+/// — distinct ids, identical audio. Keying on id left such duplicates in the
+/// packed playlist. Title + artist is normalized (lowercased, trimmed) so
+/// trivial metadata drift (case, trailing whitespace) doesn't defeat dedup.
 func deduplicate(tracks: [Track]) -> [Track] {
     var seen = Set<String>()
-    return tracks.filter { seen.insert("\($0.id)-\($0.title)-\($0.artist)").inserted }
+    return tracks.filter { seen.insert(songKey(title: $0.title, artist: $0.artist)).inserted }
+}
+
+private func songKey(title: String, artist: String) -> String {
+    "\(title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))|\(artist.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))"
 }
 
 enum PomodoroLimits {

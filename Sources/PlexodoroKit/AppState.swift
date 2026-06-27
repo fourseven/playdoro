@@ -24,6 +24,7 @@ class AppState: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var seedTracks: [Track] = []
     @Published var savedPlaylists: [SeedPlaylist] = []
+    @Published var variety: Double = PomodoroConfig.default.variety
 
     var player = AudioPlayer()
     var client: (any MusicProvider)?
@@ -47,6 +48,9 @@ class AppState: ObservableObject {
             serverName = savedName
             verifySavedConnection(token: savedToken)
         }
+
+        let savedVariety = UserDefaults.standard.object(forKey: UserDefaultsKey.variety) as? Double
+        if let savedVariety { variety = savedVariety }
 
         savedPlaylists = Self.loadSavedPlaylists()
         loadSavedEQPreset()
@@ -396,7 +400,7 @@ class AppState: ObservableObject {
             trackIds: seedTracks.map(\.id),
             limit: PomodoroConfig.default.maxCandidates
         )
-        let engine = PomodoroEngine()
+        let engine = PomodoroEngine(config: PomodoroConfig(variety: variety))
         var packed = engine.pack(tracks: nearest, mustInclude: seedTracks)
         packed = deduplicate(tracks: packed)
         packed.shuffle()
@@ -448,6 +452,12 @@ class AppState: ObservableObject {
 
     var eqEnabled: Bool {
         player.eqEnabled
+    }
+
+    func setVariety(_ value: Double) {
+        let clamped = min(max(value, 0), 1)
+        variety = clamped
+        UserDefaults.standard.set(clamped, forKey: UserDefaultsKey.variety)
     }
 
     private func loadSavedEQPreset() {

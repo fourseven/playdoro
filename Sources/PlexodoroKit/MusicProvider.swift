@@ -18,17 +18,17 @@ extension MusicProvider {
         guard !trackIds.isEmpty else { return [] }
         let perId = max(1, limit / trackIds.count)
 
-        return try await withThrowingTaskGroup(of: [Track].self) { group in
-            for id in trackIds {
+        return try await withThrowingTaskGroup(of: (Int, [Track]).self) { group in
+            for (index, id) in trackIds.enumerated() {
                 group.addTask { [self] in
-                    try await self.getNearest(trackId: id, limit: perId)
+                    let batch = try await self.getNearest(trackId: id, limit: perId)
+                    return (index, normalizeBatchScores(batch))
                 }
             }
-            var batches: [[Track]] = []
-            for try await batch in group {
-                batches.append(batch)
-            }
-            return mergeNearestResults(batches)
+            var indexed: [(Int, [Track])] = []
+            for try await item in group { indexed.append(item) }
+            indexed.sort { $0.0 < $1.0 }
+            return interleaveNearestResults(indexed.map { $0.1 })
         }
     }
 }

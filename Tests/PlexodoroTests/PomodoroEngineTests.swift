@@ -396,6 +396,233 @@ final class MergeNearestResultsTests: XCTestCase {
     }
 }
 
+final class NormalizeBatchScoresTests: XCTestCase {
+    func makeTrack(id: Int, distance: Double?) -> Track {
+        Track(
+            id: String(id),
+            title: "Track \(id)",
+            artist: "Artist",
+            album: "Album",
+            duration: 180_000,
+            key: "",
+            thumb: nil,
+            score: distance
+        )
+    }
+
+    func testMinMaxMapsClosestToZeroFarthestToOne() {
+        // min=0.2, max=0.8, range=0.6 → closest maps to 0, farthest to 1
+        let batch = [
+            makeTrack(id: 1, distance: 0.2),
+            makeTrack(id: 2, distance: 0.5),
+            makeTrack(id: 3, distance: 0.8),
+        ]
+        let result = normalizeBatchScores(batch)
+        XCTAssertEqual(try XCTUnwrap(result[0].score), 0.0, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(result[1].score), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(result[2].score), 1.0, accuracy: 1e-9)
+    }
+
+    func testMakesScoresComparableAcrossSeeds() {
+        // Seed A: tight rap cluster (tiny distances). Seed B: varied pop.
+        // After min-max normalization both spans [0, 1] AND each seed's closest
+        // maps to 0 — so the best match from every seed ties at the front.
+        let a = normalizeBatchScores([
+            makeTrack(id: 1, distance: 0.01),
+            makeTrack(id: 2, distance: 0.02),
+            makeTrack(id: 3, distance: 0.04),
+        ])
+        let b = normalizeBatchScores([
+            makeTrack(id: 9, distance: 0.50),
+            makeTrack(id: 10, distance: 0.75),
+            makeTrack(id: 11, distance: 1.00),
+        ])
+        XCTAssertEqual(try XCTUnwrap(a.first?.score), 0.0, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(b.first?.score), 0.0, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(a.last?.score), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(b.last?.score), 1.0, accuracy: 1e-9)
+    }
+
+    func testNilScoresLeftUntouched() {
+        // Only one scored track → no reference frame, so scored value is
+        // preserved as-is rather than inflated to 1.0.
+        let batch = [
+            makeTrack(id: 1, distance: nil),
+            makeTrack(id: 2, distance: 0.5),
+        ]
+        let result = normalizeBatchScores(batch)
+        XCTAssertNil(result[0].score)
+        XCTAssertEqual(try XCTUnwrap(result[1].score), 0.5, accuracy: 1e-9)
+    }
+
+    func testAllNilScoresReturnsBatchAsIs() {
+        let batch = [makeTrack(id: 1, distance: nil), makeTrack(id: 2, distance: nil)]
+        let result = normalizeBatchScores(batch)
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result.allSatisfy { $0.score == nil })
+    }
+
+    func testSingleTrackBatchUnchanged() {
+        let batch = [makeTrack(id: 1, distance: 0.5)]
+        let result = normalizeBatchScores(batch)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(try XCTUnwrap(result[0].score), 0.5, accuracy: 1e-9)
+    }
+
+    func testAllEqualDistancesReturnsUnchanged() {
+        // No spread (hi == lo) → nothing to normalize.
+        let batch = [makeTrack(id: 1, distance: 0.4), makeTrack(id: 2, distance: 0.4)]
+        let result = normalizeBatchScores(batch)
+        XCTAssertEqual(result.map { $0.score ?? -1 }, [0.4, 0.4])
+    }
+}
+
+final class InterleaveNearestResultsTests: XCTestCase {
+    func makeTrack(id: Int) -> Track {
+        Track(
+            id: String(id),
+            title: "Track \(id)",
+            artist: "Artist",
+            album: "Album",
+            duration: 180_000,
+            key: "",
+            thumb: nil,
+            score: nil
+        )
+    }
+
+    func testRoundRobinsAcrossBatches() {
+        let a = [makeTrack(id: 1), makeTrack(id: 2), makeTrack(id: 3)]
+        let b = [makeTrack(id: 4), makeTrack(id: 5), makeTrack(id: 6)]
+        let c = [makeTrack(id: 7), makeTrack(id: 8), makeTrack(id: 9)]
+
+        let result = interleaveNearestResults([a, b, c])
+
+        XCTAssertEqual(result.map(\.id), ["1", "4", "7", "2", "5", "8", "3", "6", "9"])
+    }
+
+    func testHandlesUnequalBatchLengths() {
+        let a = [makeTrack(id: 1), makeTrack(id: 2), makeTrack(id: 3)]
+        let b = [makeTrack(id: 4)]
+
+        let result = interleaveNearestResults([a, b])
+
+        // Round 0: 1, 4. Round 1: 2. Round 2: 3.
+        XCTAssertEqual(result.map(\.id), ["1", "4", "2", "3"])
+    }
+
+    func testDedupesFirstOccurrenceWins() {
+        let a = [makeTrack(id: 1), makeTrack(id: 2)]
+        let b = [makeTrack(id: 2), makeTrack(id: 3)]
+
+        let result = interleaveNearestResults([a, b])
+
+        XCTAssertEqual(result.map(\.id), ["1", "2", "3"])
+    }
+
+    func testEmptyInputs() {
+        XCTAssertTrue(interleaveNearestResults([]).isEmpty)
+        XCTAssertTrue(interleaveNearestResults([[], []]).isEmpty)
+    }
+
+    func testBalancesRegardlessOfBatchSize() {
+        // Seed A floods with 9 tracks, seeds B and C have 2 each. Round-robin
+        // still interleaves one-from-each per rank, not 9 A's in a row.
+        let a = (1...9).map { makeTrack(id: $0) }
+        let b = [makeTrack(id: 10), makeTrack(id: 11)]
+        let c = [makeTrack(id: 12), makeTrack(id: 13)]
+
+        let result = interleaveNearestResults([a, b, c])
+
+        // First three must be one from each batch (ranks 0).
+        XCTAssertEqual(Set(result.prefix(3).map(\.id)), ["1", "10", "12"])
+        // No seed-A streak longer than 1 in the balanced head of the output.
+        XCTAssertEqual(result.prefix(7).map(\.id), ["1", "10", "12", "2", "11", "13", "3"])
+    }
+}
+
+final class CrossSeedBalanceTests: XCTestCase {
+    /// Build a track tagged with its source seed (encoded in `album`) and a raw
+    /// sonic distance from that seed.
+    func seedTrack(id: Int, seed: String, distance: Double, duration: TimeInterval = 60) -> Track {
+        Track(
+            id: String(id),
+            title: "Track \(id)",
+            artist: "Artist \(seed)",
+            album: seed,
+            duration: duration * 1000,
+            key: "",
+            thumb: nil,
+            score: distance
+        )
+    }
+
+    /// Regression: with 3 diverse seeds where one (rap) clusters very tightly,
+    /// the packed playlist must represent all three seeds rather than being
+    /// flooded by the tightest cluster. Pre-fix the global score sort let the
+    /// rap seed dominate; normalize + interleave + order-respecting pack fixes it.
+    func testPackedSelectionRepresentsAllSeeds() {
+        let rap = (1...8).map { seedTrack(id: $0, seed: "rap", distance: 0.01 * Double($0)) }
+        let pop = (9...16).map { seedTrack(id: $0, seed: "pop", distance: 0.50 + 0.01 * Double($0)) }
+        let rock = (17...24).map { seedTrack(id: $0, seed: "rock", distance: 0.80 + 0.01 * Double($0)) }
+
+        let tracks = interleaveNearestResults([
+            normalizeBatchScores(rap),
+            normalizeBatchScores(pop),
+            normalizeBatchScores(rock),
+        ])
+
+        let engine = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 480,
+            tolerance: 60,
+            maxCandidates: 50
+        ))
+        let result = engine.pack(tracks: tracks, target: 480)
+
+        let seeds = Set(result.map(\.album))
+        XCTAssertEqual(seeds, ["rap", "pop", "rock"], "expected all three seeds represented; got \(seeds)")
+    }
+
+    /// Stronger balance check: aggregated across many randomized runs the three
+    /// seeds must split roughly evenly. Pre-fix the tightest (rap) cluster took
+    /// ~100% of every packed playlist; post-fix each seed lands near 1/3. Per-run
+    /// counts are noisy (small N), so we assert on the aggregate distribution.
+    func testAggregateSelectionIsBalancedAcrossSeeds() {
+        let rap = (1...10).map { seedTrack(id: $0, seed: "rap", distance: 0.01 * Double($0)) }
+        let pop = (11...20).map { seedTrack(id: $0, seed: "pop", distance: 0.50 + 0.01 * Double($0 - 10)) }
+        let rock = (21...30).map { seedTrack(id: $0, seed: "rock", distance: 0.80 + 0.01 * Double($0 - 20)) }
+
+        let tracks = interleaveNearestResults([
+            normalizeBatchScores(rap),
+            normalizeBatchScores(pop),
+            normalizeBatchScores(rock),
+        ])
+        let engine = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 540,
+            tolerance: 60,
+            maxCandidates: 50
+        ))
+
+        var totals: [String: Int] = ["rap": 0, "pop": 0, "rock": 0]
+        var totalPicks = 0
+        for _ in 0..<800 {
+            for track in engine.pack(tracks: tracks, target: 540) {
+                totals[track.album, default: 0] += 1
+                totalPicks += 1
+            }
+        }
+
+        XCTAssertGreaterThan(totalPicks, 0)
+        // Expected ~1/3 each. Bounds [0.20, 0.45] tolerate sampling noise while
+        // still catching the pre-fix regression where rap took ~99% of picks.
+        for (seed, count) in totals {
+            let share = Double(count) / Double(totalPicks)
+            XCTAssertGreaterThan(share, 0.20, "seed \(seed) under-represented: \(share)")
+            XCTAssertLessThan(share, 0.45, "seed \(seed) over-represented: \(share)")
+        }
+    }
+}
+
 final class SavedPlaylistsTests: XCTestCase {
     func makeTrack(id: Int) -> Track {
         Track(
@@ -468,5 +695,127 @@ final class SavedPlaylistsTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode([SeedPlaylist].self, from: data)
         XCTAssertEqual(decoded, original)
+    }
+}
+
+final class SelectionWeightTests: XCTestCase {
+    func testMaxVarietyIsUniform() {
+        // variety = 1 → every track weighs equally regardless of distance.
+        let close = selectionWeight(score: 0.0, variety: 1)
+        let mid = selectionWeight(score: 0.5, variety: 1)
+        let far = selectionWeight(score: 1.0, variety: 1)
+        XCTAssertEqual(close, mid, accuracy: 1e-9)
+        XCTAssertEqual(mid, far, accuracy: 1e-9)
+        XCTAssertEqual(close, 1.0, accuracy: 1e-9)
+    }
+
+    func testStrictVarietyPrefersClosest() {
+        // variety = 0 → closest (score 0) dominates, farthest (score 1) gets 0.
+        XCTAssertEqual(selectionWeight(score: 0.0, variety: 0), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(selectionWeight(score: 1.0, variety: 0), 0.0, accuracy: 1e-9)
+    }
+
+    func testWeightMonotonicInScore() {
+        // Lower distance (score) never weighs less than higher distance.
+        for variety: Double in [0.0, 0.25, 0.5, 0.75] {
+            let closer = selectionWeight(score: 0.2, variety: variety)
+            let farther = selectionWeight(score: 0.8, variety: variety)
+            XCTAssertGreaterThanOrEqual(closer, farther, "closer should outweigh farther at variety \(variety)")
+        }
+    }
+
+    func testMidVarietySitsBetweenExtremes() {
+        let s = 0.5
+        let strict = selectionWeight(score: s, variety: 0)
+        let mid = selectionWeight(score: s, variety: 0.5)
+        let loose = selectionWeight(score: s, variety: 1)
+        XCTAssertGreaterThan(loose, mid, "loose should outweigh mid")
+        XCTAssertGreaterThan(mid, strict, "mid should outweigh strict")
+    }
+
+    func testClampsOutOfRange() {
+        // variety < 0 behaves like 0; variety > 1 behaves like 1.
+        XCTAssertEqual(selectionWeight(score: 0.5, variety: -1), selectionWeight(score: 0.5, variety: 0), accuracy: 1e-9)
+        XCTAssertEqual(selectionWeight(score: 0.5, variety: 2), selectionWeight(score: 0.5, variety: 1), accuracy: 1e-9)
+    }
+
+    func testNilScoreTreatedAsFar() {
+        // Unknown distance should weigh the same as the farthest track.
+        XCTAssertEqual(selectionWeight(score: nil, variety: 0.5), selectionWeight(score: 1.0, variety: 0.5), accuracy: 1e-9)
+    }
+
+    func testCloserAlwaysBeatsFarAtStrict() {
+        // Even a very close-ish track (0.1) should outweigh a far one (0.9) at strict.
+        XCTAssertGreaterThan(selectionWeight(score: 0.1, variety: 0), selectionWeight(score: 0.9, variety: 0))
+    }
+}
+
+final class VarietySelectionTests: XCTestCase {
+    func makeRankedTrack(_ rank: Int, of total: Int, duration: TimeInterval = 30) -> Track {
+        Track(
+            id: "t\(rank)",
+            title: "Track \(rank)",
+            artist: "Artist",
+            album: "Album",
+            duration: duration * 1000,
+            key: "",
+            thumb: nil,
+            score: Double(rank) / Double(total - 1)
+        )
+    }
+
+    /// High variety should roam further across the candidate pool than strict.
+    /// Aggregated over many runs, variety=1 reaches distinctly more tracks than
+    /// variety=0 (which stays near the sonically-nearest front). Comparative
+    /// only — the absolute reach depends on the weight curve and pool spacing.
+    func testHighVarietyReachesFurtherThanStrict() {
+        let total = 40
+        let batch = (0..<total).map { makeRankedTrack($0, of: total) }
+
+        let strict = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 240, tolerance: 0, maxCandidates: 50, variety: 0
+        ))
+        let varied = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 240, tolerance: 0, maxCandidates: 50, variety: 1
+        ))
+
+        var strictSeen = Set<String>()
+        var variedSeen = Set<String>()
+        for _ in 0..<400 {
+            for track in strict.pack(tracks: batch, target: 240) { strictSeen.insert(track.id) }
+            for track in varied.pack(tracks: batch, target: 240) { variedSeen.insert(track.id) }
+        }
+
+        XCTAssertGreaterThan(variedSeen.count, strictSeen.count,
+                             "high variety should reach more distinct tracks than strict")
+    }
+
+    /// Strict variety should, on average, pick lower-rank (closer) tracks than
+    /// high variety — i.e. the mean selected rank is lower at variety=0.
+    func testStrictPicksLowerRanksOnAverage() {
+        let total = 20
+        let batch = (0..<total).map { makeRankedTrack($0, of: total) }
+
+        let strict = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 240, tolerance: 0, maxCandidates: 50, variety: 0
+        ))
+        let varied = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 240, tolerance: 0, maxCandidates: 50, variety: 1
+        ))
+
+        func meanRank(_ engine: PomodoroEngine) -> Double {
+            var sum = 0
+            var n = 0
+            for _ in 0..<400 {
+                for track in engine.pack(tracks: batch, target: 240) {
+                    sum += Int(track.id.dropFirst()) ?? 0
+                    n += 1
+                }
+            }
+            return n > 0 ? Double(sum) / Double(n) : 0
+        }
+
+        XCTAssertLessThan(meanRank(strict), meanRank(varied),
+                          "strict should pick closer (lower-rank) tracks on average")
     }
 }

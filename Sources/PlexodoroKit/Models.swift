@@ -8,6 +8,7 @@ enum UserDefaultsKey {
     static let savedPlaylists = "savedPlaylists"
     static let eqPresetID = "eqPresetID"
     static let eqEnabled = "eqEnabled"
+    static let variety = "variety"
 }
 
 func deduplicate(tracks: [Track]) -> [Track] {
@@ -28,6 +29,53 @@ func mergeNearestResults(_ batches: [[Track]]) -> [Track] {
     for batch in batches {
         for track in batch where seen.insert(track.id).inserted {
             out.append(track)
+        }
+    }
+    return out
+}
+
+/// Normalize each track's `score` (raw sonic distance from its seed) via
+/// min-max within its batch, so the closest track maps to 0 and the farthest
+/// to 1. Raw distances are NOT comparable across seeds — a tight cluster
+/// (e.g. rap) has uniformly tiny distances while a varied cluster (e.g. pop)
+/// has larger ones, so a global ranking would let the tightest cluster
+/// dominate. Min-max normalization expresses each track's *relative* position
+/// in its own seed's neighbourhood (0 = best match for that seed, 1 = worst),
+/// making both the `score` field and the weighted-variety sampling comparable
+/// across seeds. Pure helper; batch is assumed to be in nearest-first order.
+func normalizeBatchScores(_ batch: [Track]) -> [Track] {
+    let distances = batch.compactMap { $0.score }
+    guard distances.count >= 2,
+          let lo = distances.min(),
+          let hi = distances.max(),
+          hi > lo else { return batch }
+    let range = hi - lo
+    return batch.map { track in
+        var copy = track
+        if let d = copy.score { copy.score = (d - lo) / range }
+        return copy
+    }
+}
+
+/// Interleave nearest-neighbour batches from multiple seeds round-robin
+/// (batch0[0], batch1[0], …, batch0[1], batch1[1], …) and dedupe by track id
+/// (first occurrence wins). Because each batch is in nearest-first order, this
+/// yields rank-0 from every seed, then rank-1 from every seed, etc. — so the
+/// packing engine's front-to-back walk rotates across seeds instead of sitting
+/// inside whichever single seed has the smallest raw distances. Guarantees
+/// balanced cross-seed representation regardless of per-batch sizes.
+func interleaveNearestResults(_ batches: [[Track]]) -> [Track] {
+    guard !batches.isEmpty else { return [] }
+    let maxLen = batches.map(\.count).max() ?? 0
+    var seen = Set<String>()
+    var out: [Track] = []
+    out.reserveCapacity(maxLen * batches.count)
+    for index in 0..<maxLen {
+        for batch in batches where index < batch.count {
+            let track = batch[index]
+            if seen.insert(track.id).inserted {
+                out.append(track)
+            }
         }
     }
     return out
@@ -73,7 +121,7 @@ struct Track: Identifiable, Equatable, Codable {
     let duration: TimeInterval
     let key: String
     let thumb: String?
-    let score: Double?
+    var score: Double?
     var isDownloaded = false
 }
 
@@ -112,6 +160,10 @@ struct PomodoroConfig {
     var targetDuration: TimeInterval = 25 * 60
     var tolerance: TimeInterval = 60
     var maxCandidates: Int = 200
+    /// Track-selection variety in [0, 1]: 0 = strict (always the sonically
+    /// nearest matches), 1 = fully random within each selection window. Drives
+    /// weighted sampling in `PomodoroEngine.fillLookahead`.
+    var variety: Double = 0.5
     static let `default` = PomodoroConfig()
 }
 

@@ -36,6 +36,7 @@ struct SettingsView: View {
             if appState.isConfigured {
                 connectionSection
                 audioSection
+                playbackSection
                 Section {
                     Button("Disconnect", role: .destructive) {
                         appState.disconnect()
@@ -117,6 +118,35 @@ struct SettingsView: View {
             }
         }
     }
+
+    private var playbackSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Variety", systemImage: "shuffle")
+                    Spacer()
+                    Text("\(Int(appState.variety * 100))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: Binding(
+                    get: { appState.variety },
+                    set: { appState.setVariety($0) }
+                ), in: 0...1)
+                HStack {
+                    Text("Similar")
+                    Spacer()
+                    Text("Eclectic")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Playback")
+        } footer: {
+            Text("How closely packed tracks stick to your seeds. Lower favours sonically similar matches; higher roams further afield.")
+        }
+    }
     #endif
 
     // MARK: - macOS
@@ -145,6 +175,10 @@ struct SettingsView: View {
                 Divider()
 
                 macEQSection
+
+                Divider()
+
+                macVarietySection
 
                 Divider()
 
@@ -211,6 +245,36 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
+    }
+
+    private var macVarietySection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "shuffle")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Variety")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text("\(Int(appState.variety * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.secondary)
+            }
+            Slider(value: Binding(
+                get: { appState.variety },
+                set: { appState.setVariety($0) }
+            ), in: 0...1)
+            HStack {
+                Text("Similar")
+                Spacer()
+                Text("Eclectic")
+            }
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            Text("How closely packed tracks stick to your seeds.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
     }
     #endif
 }

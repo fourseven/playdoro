@@ -401,8 +401,8 @@ class AppState: ObservableObject {
             limit: PomodoroConfig.default.maxCandidates
         )
         let engine = PomodoroEngine(config: PomodoroConfig(variety: variety))
-        var packed = engine.pack(tracks: nearest, mustInclude: seedTracks)
-        packed = deduplicate(tracks: packed)
+        let candidates = deduplicateForPacking(candidates: nearest, seeds: seedTracks)
+        var packed = engine.pack(tracks: candidates, mustInclude: seedTracks)
         packed.shuffle()
         let totalSeconds = engine.totalDuration(of: packed)
 

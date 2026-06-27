@@ -311,6 +311,67 @@ final class DeduplicateTests: XCTestCase {
     }
 }
 
+final class DeduplicateForPackingTests: XCTestCase {
+    func makeTrack(id: Int, title: String, artist: String = "Artist", duration: TimeInterval = 180) -> Track {
+        Track(
+            id: String(id), title: title, artist: artist, album: "Album",
+            duration: duration * 1000, key: "", thumb: nil, score: nil
+        )
+    }
+
+    /// Regression: dedupe must run BEFORE packing, not after. Deduping after
+    /// packing removes tracks the engine already counted toward the target
+    /// duration, so the playlist starts short (25 min target → ~20 min actual).
+    /// Pre-deduped candidates feed the engine, so it fills to target with
+    /// unique songs and no post-pack drop occurs.
+    func testExcludesCandidatesMatchingSeedsBySong() {
+        let seed = makeTrack(id: 1, title: "Song A")
+        let dupeCandidate = makeTrack(id: 2, title: "Song A", artist: "Artist")  // same song, different id
+        let unique = makeTrack(id: 3, title: "Song B")
+
+        let result = deduplicateForPacking(candidates: [dupeCandidate, unique], seeds: [seed])
+
+        XCTAssertEqual(result.map(\.id), ["3"], "candidate same-song-as-seed should be excluded")
+    }
+
+    func testDedupesCandidatesAmongThemselves() {
+        let candidates = [
+            makeTrack(id: 1, title: "Song A"),
+            makeTrack(id: 2, title: "Song A"),  // same song, different id/album
+            makeTrack(id: 3, title: "Song B"),
+        ]
+
+        let result = deduplicateForPacking(candidates: candidates, seeds: [])
+
+        XCTAssertEqual(result.map(\.id), ["1", "3"])
+    }
+
+    func testEmptyCandidatesAndSeeds() {
+        XCTAssertTrue(deduplicateForPacking(candidates: [], seeds: []).isEmpty)
+    }
+
+    /// The whole point: after pre-dedup, the packed playlist must still reach
+    /// the target duration — dedup must not shorten it.
+    func testPackedDurationStaysAtTargetAfterDedup() {
+        // 8 candidates where tracks 5 and 6 are the same song as 1 and 2.
+        let candidates = (1...8).map { makeTrack(id: $0, title: "Song \($0)", duration: 200) }
+            + [makeTrack(id: 9, title: "Song 1", duration: 200),  // dup of id 1
+               makeTrack(id: 10, title: "Song 2", duration: 200)] // dup of id 2
+
+        let deduped = deduplicateForPacking(candidates: candidates, seeds: [])
+        let engine = PomodoroEngine(config: PomodoroConfig(
+            targetDuration: 1200, tolerance: 60, maxCandidates: 50
+        ))
+        let packed = engine.pack(tracks: deduped, mustInclude: [], target: 1200)
+        let total = engine.totalDuration(of: packed)
+
+        // 1200 target, ±60 tolerance. Pre-fix post-pack dedup would have dropped
+        // the two dupes (400s) and landed at ~800s — well under min 1140.
+        XCTAssertGreaterThanOrEqual(total, 1140, "packed duration must reach min after pre-dedup; got \(total)")
+        XCTAssertLessThanOrEqual(total, 1260)
+    }
+}
+
 final class ErrorDescriptionTests: XCTestCase {
     func testAllCasesReturnNonEmptyDescription() {
         let cases: [PlexodoroError] = [

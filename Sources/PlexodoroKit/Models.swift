@@ -22,7 +22,17 @@ func deduplicate(tracks: [Track]) -> [Track] {
     return tracks.filter { seen.insert(songKey(title: $0.title, artist: $0.artist)).inserted }
 }
 
-private func songKey(title: String, artist: String) -> String {
+/// Dedupe the candidate pool by song identity, excluding any track that is the
+/// same song as a seed. Run this BEFORE packing so the engine fills to the
+/// target duration with unique songs — deduping after packing shortens the
+/// playlist below target whenever a duplicate gets removed.
+func deduplicateForPacking(candidates: [Track], seeds: [Track]) -> [Track] {
+    var seen = Set<String>()
+    for seed in seeds { seen.insert(songKey(title: seed.title, artist: seed.artist)) }
+    return candidates.filter { seen.insert(songKey(title: $0.title, artist: $0.artist)).inserted }
+}
+
+func songKey(title: String, artist: String) -> String {
     "\(title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))|\(artist.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))"
 }
 

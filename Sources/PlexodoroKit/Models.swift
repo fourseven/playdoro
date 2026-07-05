@@ -37,7 +37,7 @@ func songKey(title: String, artist: String) -> String {
 }
 
 enum PomodoroLimits {
-    static let maxSeeds = 3
+    static let maxSeeds = 4
     static let savedPlaylistsMax = 3
 }
 

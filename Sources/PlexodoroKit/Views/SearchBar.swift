@@ -23,16 +23,21 @@ struct SearchBar: View {
 
     private var selectedIds: Set<String> { Set(selectedSeeds.map(\.id)) }
     private var canAddMore: Bool { selectedSeeds.count < maxSeeds }
+    private var atMaxSeeds: Bool { selectedSeeds.count >= maxSeeds }
+    private var placeholder: String {
+        atMaxSeeds ? "Remove a seed to search again" : "Search for seed tracks…"
+    }
 
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.white.opacity(0.55))
-                TextField("Search for seed tracks…", text: $searchText)
+                    .foregroundStyle(.white.opacity(atMaxSeeds ? 0.25 : 0.55))
+                TextField(placeholder, text: $searchText)
                     .textFieldStyle(.plain)
                     .foregroundStyle(.white)
                     .tint(Theme.accent)
+                    .disabled(atMaxSeeds)
                     .onChange(of: searchText) { _, newValue in
                         onSearch(newValue)
                     }

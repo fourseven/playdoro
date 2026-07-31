@@ -115,6 +115,10 @@ struct EQPickerView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 2) {
+                if showRecentSection, !appState.recentEQPresets.isEmpty {
+                    recentSection
+                    Divider().padding(.vertical, 4)
+                }
                 ForEach(filteredPresets) { preset in
                     row(for: preset)
                 }
@@ -123,6 +127,26 @@ struct EQPickerView: View {
             .padding(.bottom, 8)
         }
         .frame(minHeight: 240)
+    }
+
+    /// The Recent section only makes sense while browsing the full catalog —
+    /// once the user is searching or filtering by author, hide it so it never
+    /// fights the active filter.
+    private var showRecentSection: Bool {
+        searchText.trimmingCharacters(in: .whitespaces).isEmpty && authorFilter == nil
+    }
+
+    private var recentSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Recent")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.top, 4)
+            ForEach(appState.recentEQPresets) { preset in
+                row(for: preset)
+            }
+        }
     }
 
     private func row(for preset: EQPreset) -> some View {

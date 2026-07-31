@@ -24,6 +24,7 @@ class AppState: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var seedTracks: [Track] = []
     @Published var savedPlaylists: [SeedPlaylist] = []
+    @Published var recentEQPresetIDs: [String] = []
     @Published var variety: Double = PomodoroConfig.default.variety
 
     var player = AudioPlayer()
@@ -53,6 +54,7 @@ class AppState: ObservableObject {
         if let savedVariety { variety = savedVariety }
 
         savedPlaylists = Self.loadSavedPlaylists()
+        recentEQPresetIDs = UserDefaults.standard.stringArray(forKey: UserDefaultsKey.recentEQPresetIDs) ?? []
         loadSavedEQPreset()
 
         player.$isPlaying
@@ -439,6 +441,30 @@ class AppState: ObservableObject {
     func applyEQ(preset: EQPreset) {
         player.applyEQ(preset: preset)
         UserDefaults.standard.set(preset.id, forKey: UserDefaultsKey.eqPresetID)
+        recordRecentEQPreset(preset)
+    }
+
+    /// Prepend the preset to the recents list (skip Flat — "EQ off" isn't a
+    /// headphone swap worth pinning to the top).
+    private func recordRecentEQPreset(_ preset: EQPreset) {
+        guard preset.id != "flat" else { return }
+        let updated = mergeRecentEQPresets(
+            existing: recentEQPresetIDs,
+            added: preset.id,
+            maxRetained: PomodoroLimits.recentEQPresetsMax
+        )
+        guard updated != recentEQPresetIDs else { return }
+        recentEQPresetIDs = updated
+        UserDefaults.standard.set(updated, forKey: UserDefaultsKey.recentEQPresetIDs)
+    }
+
+    /// Recently-used presets resolved to their full values, in most-recent-first
+    /// order. Stale IDs (deleted/renamed presets) resolve to `.flat` and are
+    /// filtered out, so the section silently self-heals.
+    var recentEQPresets: [EQPreset] {
+        recentEQPresetIDs
+            .map { EQPreset.resolve(id: $0) }
+            .filter { $0.id != "flat" }
     }
 
     var currentEQPreset: EQPreset {

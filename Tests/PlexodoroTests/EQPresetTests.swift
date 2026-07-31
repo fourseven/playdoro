@@ -152,4 +152,26 @@ final class EQPresetTests: XCTestCase {
         XCTAssertEqual(first?.gain ?? 0, 6.4, accuracy: 0.001)
         XCTAssertEqual(first?.q ?? 0, 0.70, accuracy: 0.001)
     }
+
+    // MARK: - Recent presets
+
+    func testRecentMergePrependsNewID() {
+        let result = mergeRecentEQPresets(existing: ["a", "b"], added: "c", maxRetained: 3)
+        XCTAssertEqual(result, ["c", "a", "b"])
+    }
+
+    func testRecentMergeMovesExistingToFront() {
+        let result = mergeRecentEQPresets(existing: ["a", "b", "c"], added: "b", maxRetained: 3)
+        XCTAssertEqual(result, ["b", "a", "c"])
+    }
+
+    func testRecentMergeCapsAtMax() {
+        let result = mergeRecentEQPresets(existing: ["a", "b", "c"], added: "d", maxRetained: 3)
+        XCTAssertEqual(result, ["d", "a", "b"])
+    }
+
+    func testRecentMergeDedupes() {
+        let result = mergeRecentEQPresets(existing: ["a", "a", "b"], added: "a", maxRetained: 3)
+        XCTAssertEqual(result, ["a", "b"])
+    }
 }

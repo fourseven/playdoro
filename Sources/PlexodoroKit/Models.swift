@@ -7,6 +7,7 @@ enum UserDefaultsKey {
     static let plexClientId = "plexClientId"
     static let savedPlaylists = "savedPlaylists"
     static let eqPresetID = "eqPresetID"
+    static let recentEQPresetIDs = "recentEQPresetIDs"
     static let eqEnabled = "eqEnabled"
     static let variety = "variety"
 }
@@ -39,6 +40,7 @@ func songKey(title: String, artist: String) -> String {
 enum PomodoroLimits {
     static let maxSeeds = 4
     static let savedPlaylistsMax = 3
+    static let recentEQPresetsMax = 3
 }
 
 /// Merge nearest-neighbour batches from multiple seeds, preserving first-occurrence order
@@ -166,6 +168,15 @@ struct SeedPlaylist: Codable, Identifiable, Equatable {
 func mergeSavedPlaylists(existing: [SeedPlaylist], added: SeedPlaylist, maxRetained: Int) -> [SeedPlaylist] {
     let addedSig = added.signature
     let filtered = existing.filter { $0.signature != addedSig }
+    return ([added] + filtered).prefix(maxRetained).map { $0 }
+}
+
+/// Prepend a freshly-applied EQ preset ID to the recents list, dedupe, and cap
+/// at `maxRetained` (oldest dropped). Most-recent-first. Powers the "Recent"
+/// section in the EQ picker so frequent swaps (e.g. home vs. office cans) don't
+/// require hunting through the full catalog. Pure so it can be unit-tested.
+func mergeRecentEQPresets(existing: [String], added: String, maxRetained: Int) -> [String] {
+    let filtered = existing.filter { $0 != added }
     return ([added] + filtered).prefix(maxRetained).map { $0 }
 }
 

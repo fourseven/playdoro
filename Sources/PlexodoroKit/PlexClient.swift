@@ -120,31 +120,35 @@ actor PlexClient: MusicProvider {
         log.debug("Searching: '\(trimmed)'")
 
         let sectionIDs = try await musicSectionIDs()
-        let perSearchLimit = 50
 
         // Primary: full-phrase search. Plex matches the whole query as a
         // (case-insensitive) substring, so "stupid song" hits the literal title
         // rather than every track containing the word "song". The global
         // /search endpoint also covers artist/album matches with Plex's own
-        // relevance ranking.
+        // relevance ranking. A literal phrase is precise, so a modest limit
+        // is fine here.
         let phraseBatches = try await runFieldSearches(
             terms: [trimmed],
             sectionIDs: sectionIDs,
             includeGlobal: true,
-            perSearchLimit: perSearchLimit
+            perSearchLimit: 50
         )
         var scored = scoreSearchBatches(phraseBatches, query: trimmed)
 
         // Fallback: a reordered/partial query (e.g. "song stupid") won't match
         // as a phrase, so fall back to per-token field searches so partial
-        // matches still surface.
+        // matches still surface. Plex orders these token matches by its own
+        // relevance and truncates, so pull a wide window and let
+        // `trackMatchScore` re-rank client-side with normalization (a
+        // typographic apostrophe in library metadata, e.g. "Don't Stay" vs
+        // "Don't Stay", would otherwise fall outside the top hits).
         if scored.isEmpty {
             let tokens = Array(Set(trimmed.split(separator: " ").map(String.init)))
             let tokenBatches = try await runFieldSearches(
                 terms: tokens,
                 sectionIDs: sectionIDs,
                 includeGlobal: false,
-                perSearchLimit: perSearchLimit
+                perSearchLimit: 500
             )
             scored = scoreSearchBatches(tokenBatches, query: trimmed)
         }

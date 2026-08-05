@@ -125,8 +125,7 @@ actor PlexClient: MusicProvider {
         // (case-insensitive) substring, so "stupid song" hits the literal title
         // rather than every track containing the word "song". The global
         // /search endpoint also covers artist/album matches with Plex's own
-        // relevance ranking. A literal phrase is precise, so a modest limit
-        // is fine here.
+        // relevance ranking.
         let phraseBatches = try await runFieldSearches(
             terms: [trimmed],
             sectionIDs: sectionIDs,
@@ -137,11 +136,8 @@ actor PlexClient: MusicProvider {
 
         // Fallback: a reordered/partial query (e.g. "song stupid") won't match
         // as a phrase, so fall back to per-token field searches so partial
-        // matches still surface. Plex orders these token matches by its own
-        // relevance and truncates, so pull a wide window and let
-        // `trackMatchScore` re-rank client-side with normalization (a
-        // typographic apostrophe in library metadata, e.g. "Don't Stay" vs
-        // "Don't Stay", would otherwise fall outside the top hits).
+        // matches still surface. Plex truncates token matches by its own
+        // relevance, so pull a wide window and re-rank with normalization.
         if scored.isEmpty {
             let tokens = Array(Set(trimmed.split(separator: " ").map(String.init)))
             let tokenBatches = try await runFieldSearches(

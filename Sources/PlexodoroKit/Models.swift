@@ -101,11 +101,7 @@ func interleaveNearestResults(_ batches: [[Track]]) -> [Track] {
     return out
 }
 
-/// Fold a string for search comparison: lowercase, strip diacritics and
-/// full-width variants, then drop every non-alphanumeric character. So
-/// "Don't Stay", "Don’t Stay" and "DON'T STAY" all fold to "dontstay",
-/// letting the matcher ignore how punctuation is encoded in library metadata.
-/// Pure so it can be unit-tested without hitting the network.
+/// Fold for search comparison: case/diacritics/width-insensitive, non-alphanumerics stripped.
 func normalizedSearchText(_ s: String) -> String {
     let folded = s.folding(
         options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
@@ -118,9 +114,7 @@ func normalizedSearchText(_ s: String) -> String {
 /// Relevance weight for a single search hit. Used by `PlexClient.searchTracks`
 /// to rank results: an exact (normalized) title match beats a prefix match,
 /// which beats a substring match, which beats an artist/album-only hit.
-/// Normalized comparison means punctuation/diacritic mismatches between the
-/// typed query and the library metadata still rank correctly. Pure so it can
-/// be unit-tested without hitting the network.
+/// Pure so it can be unit-tested without hitting the network.
 func trackMatchScore(_ track: Track, query: String) -> Int {
     let q = normalizedSearchText(query)
     guard !q.isEmpty else { return 1 }

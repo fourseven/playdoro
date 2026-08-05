@@ -58,8 +58,6 @@ final class SearchScoringTests: XCTestCase {
     }
 
     func testCurlyApostropheMatchesStraightQuery() {
-        // Library metadata often uses typographic apostrophes (MusicBrainz
-        // titles like "Don't Stay") while users type straight ones.
         XCTAssertEqual(trackMatchScore(make("Don’t Stay"), query: "Don't Stay"), 100)
         XCTAssertEqual(trackMatchScore(make("Don't Stay"), query: "Don’t Stay"), 100)
         XCTAssertEqual(trackMatchScore(make("Don’t Stay Home"), query: "Don't Stay"), 60)
@@ -71,9 +69,6 @@ final class SearchScoringTests: XCTestCase {
     }
 
     func testNormalizedTitleOutranksUnrelatedTokenHit() {
-        // Simulates the fallback: Plex returns the token-matched batch
-        // ("Don't Stay" and "Stay" both match `title=stay`), and client-side
-        // normalization must rank the real track first.
         let target = make("Don’t Stay", id: "lp")
         let unrelated = make("Stay", id: "other")
         let scored = scoreSearchBatches([[target, unrelated]], query: "Don't Stay")

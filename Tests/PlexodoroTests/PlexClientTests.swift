@@ -57,6 +57,26 @@ final class SearchScoringTests: XCTestCase {
         XCTAssertEqual(trackMatchScore(make("completely unrelated"), query: "stupid song"), 1)
     }
 
+    func testCurlyApostropheMatchesStraightQuery() {
+        XCTAssertEqual(trackMatchScore(make("Don’t Stay"), query: "Don't Stay"), 100)
+        XCTAssertEqual(trackMatchScore(make("Don't Stay"), query: "Don’t Stay"), 100)
+        XCTAssertEqual(trackMatchScore(make("Don’t Stay Home"), query: "Don't Stay"), 60)
+    }
+
+    func testDiacriticsAndPunctuationAreIgnored() {
+        XCTAssertEqual(trackMatchScore(make("Ángela"), query: "Angela"), 100)
+        XCTAssertEqual(trackMatchScore(make("Run-Away"), query: "Runaway"), 100)
+    }
+
+    func testNormalizedTitleOutranksUnrelatedTokenHit() {
+        let target = make("Don’t Stay", id: "lp")
+        let unrelated = make("Stay", id: "other")
+        let scored = scoreSearchBatches([[target, unrelated]], query: "Don't Stay")
+
+        let ranked = scored.values.sorted { $0.score > $1.score }
+        XCTAssertEqual(ranked.first?.track.id, "lp", "Normalized exact title match should outrank a plain token hit")
+    }
+
     func testEmptyQueryScoresBaseline() {
         XCTAssertEqual(trackMatchScore(make("anything"), query: "   "), 1)
     }

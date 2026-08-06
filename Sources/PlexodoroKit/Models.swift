@@ -103,14 +103,24 @@ func interleaveNearestResults(_ batches: [[Track]]) -> [Track] {
     return out
 }
 
+/// Fold for search comparison: case/diacritics/width-insensitive, non-alphanumerics stripped.
+func normalizedSearchText(_ s: String) -> String {
+    let folded = s.folding(
+        options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+        locale: Locale(identifier: "en_US_POSIX")
+    )
+    let alphanumerics = folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }
+    return String(alphanumerics)
+}
+
 /// Relevance weight for a single search hit. Used by `PlexClient.searchTracks`
-/// to rank results: an exact (case-insensitive) title match beats a prefix
-/// match, which beats a substring match, which beats an artist/album-only hit.
+/// to rank results: an exact (normalized) title match beats a prefix match,
+/// which beats a substring match, which beats an artist/album-only hit.
 /// Pure so it can be unit-tested without hitting the network.
 func trackMatchScore(_ track: Track, query: String) -> Int {
-    let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+    let q = normalizedSearchText(query)
     guard !q.isEmpty else { return 1 }
-    let title = track.title.lowercased()
+    let title = normalizedSearchText(track.title)
     if title == q { return 100 }
     if title.hasPrefix(q) { return 60 }
     if title.contains(q) { return 30 }

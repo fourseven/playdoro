@@ -26,7 +26,7 @@ struct ConnectView: View {
                         .foregroundStyle(.white)
                 }
 
-                Text("Plexodoro")
+                Text(AppIdentity.name)
                     .font(Theme.titleFont)
                     .foregroundStyle(.white)
                     .padding(.top, 24)

@@ -12,7 +12,7 @@ typealias PlatformColor = NSColor
 typealias PlatformImage = NSImage
 #endif
 
-private let log = Logger(label: "com.plexodoro.palette")
+private let log = Logger(label: AppIdentity.key("palette"))
 
 struct AlbumPalette: Equatable {
     let primary: Color

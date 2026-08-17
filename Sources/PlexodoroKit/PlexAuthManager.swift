@@ -4,7 +4,7 @@ import Logging
 import UIKit
 #endif
 
-private let log = Logger(label: "com.plexodoro.plexauth")
+private let log = Logger(label: AppIdentity.key("plexauth"))
 
 actor PlexAuthManager {
     private let session: URLSession
@@ -46,7 +46,7 @@ actor PlexAuthManager {
     private var baseHeaders: [String: String] {
         [
             "X-Plex-Client-Identifier": clientId,
-            "X-Plex-Product": "Plexodoro",
+            "X-Plex-Product": AppIdentity.name,
             "X-Plex-Device": platformOS,
             "X-Plex-Device-Name": platformName,
             "X-Plex-Platform": platformOS,

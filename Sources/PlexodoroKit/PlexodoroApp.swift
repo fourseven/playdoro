@@ -12,7 +12,7 @@ public struct PlexodoroApp: App {
 
     public var body: some Scene {
         #if os(macOS)
-        MenuBarExtra("Plexodoro", systemImage: "timer") {
+        MenuBarExtra(AppIdentity.name, systemImage: "timer") {
             ContentView(appState: appState)
         }
         .menuBarExtraStyle(.window)

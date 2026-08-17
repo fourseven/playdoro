@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import Logging
 
-private let log = Logger(label: "com.plexodoro.appstate")
+private let log = Logger(label: AppIdentity.key("appstate"))
 
 @MainActor
 class AppState: ObservableObject {

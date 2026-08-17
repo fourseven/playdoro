@@ -14,7 +14,7 @@ actor TrackCache {
     init(maxSizeBytes: Int = defaultMaxSizeBytes) {
         self.maxSizeBytes = maxSizeBytes
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        self.cacheDirectory = caches.appendingPathComponent("com.plexodoro.trackcache", isDirectory: true)
+        self.cacheDirectory = caches.appendingPathComponent(AppIdentity.key("trackcache"), isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 

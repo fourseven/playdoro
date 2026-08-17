@@ -5,8 +5,8 @@ import Logging
 import UIKit
 #endif
 
-private let log = Logger(label: "com.plexodoro.audioplayer")
-private let fileLogURL = FileManager.default.temporaryDirectory.appendingPathComponent("plexodoro_audio_player.log")
+private let log = Logger(label: AppIdentity.key("audioplayer"))
+private let fileLogURL = FileManager.default.temporaryDirectory.appendingPathComponent(AppIdentity.audioLogFileName)
 private let dateFormatter: DateFormatter = {
     let f = DateFormatter()
     f.dateFormat = "HH:mm:ss.SSS"
@@ -501,7 +501,7 @@ class AudioPlayer: ObservableObject {
     #if canImport(UIKit)
     private func beginDownloadBackgroundTask() {
         guard backgroundTaskID == nil || backgroundTaskID == .invalid else { return }
-        let id = UIApplication.shared.beginBackgroundTask(withName: "com.plexodoro.audio.download") { [weak self] in
+        let id = UIApplication.shared.beginBackgroundTask(withName: AppIdentity.key("audio.download")) { [weak self] in
             Task { @MainActor in
                 self?.endDownloadBackgroundTask()
             }

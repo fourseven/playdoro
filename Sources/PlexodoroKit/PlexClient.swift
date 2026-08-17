@@ -245,6 +245,19 @@ actor PlexClient: MusicProvider {
         return (container.metadata ?? []).map { $0.toTrack }
     }
 
+    /// Record a completed play in Plex's play history (scrobble). `track.id`
+    /// is the rating key the endpoint expects.
+    func reportPlay(for track: Track) async throws {
+        _ = try await fetchJSON(
+            path: "/:/scrobble",
+            query: [
+                URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
+                URLQueryItem(name: "key", value: track.id)
+            ]
+        )
+        log.info("Reported play: \(track.title) (id \(track.id))")
+    }
+
     nonisolated func thumbURL(for track: Track) -> URL? {
         guard let thumb = track.thumb else { return nil }
         return tokenURL(path: thumb)

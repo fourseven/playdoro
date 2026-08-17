@@ -69,9 +69,9 @@ class AudioPlayer: ObservableObject {
         return URLSession(configuration: config, delegate: CertDelegate(), delegateQueue: nil)
     }()
 
-    var onTrackFinished: (() -> Void)?
-    var onPlaylistFinished: (() -> Void)?
-    var onStoppedAtTrackEnd: (() -> Void)?
+    var onTrackFinished: ((Track) -> Void)?
+    var onPlaylistFinished: ((Track?) -> Void)?
+    var onStoppedAtTrackEnd: ((Track?) -> Void)?
     var onTrackDownloaded: ((Track) -> Void)?
 
     init() {
@@ -461,6 +461,10 @@ class AudioPlayer: ObservableObject {
 
         fileLog("Track \(index) finished")
 
+        // Capture the finished track before stop() (or index mutation) clears
+        // or repoints the tracks array.
+        let finishedTrack = index < tracks.count ? tracks[index] : nil
+
         if shouldStopAfterCurrentTrack || index == audioFiles.count - 1 {
             hasHandledPlaylistEnd = true
             isPlaying = false
@@ -468,16 +472,22 @@ class AudioPlayer: ObservableObject {
             if shouldStopAfterCurrentTrack {
                 fileLog("Stopped after current track")
                 stop()
-                onStoppedAtTrackEnd?()
+                if let finishedTrack {
+                    onStoppedAtTrackEnd?(finishedTrack)
+                }
             } else {
                 fileLog("Playlist finished")
-                onPlaylistFinished?()
+                if let finishedTrack {
+                    onPlaylistFinished?(finishedTrack)
+                }
             }
         } else {
             currentTrackIndex = index + 1
             accumulatedPlayTime = 0
             lastTickTimestamp = isPlaying ? Date() : nil
-            onTrackFinished?()
+            if let finishedTrack {
+                onTrackFinished?(finishedTrack)
+            }
         }
     }
 
@@ -498,7 +508,7 @@ class AudioPlayer: ObservableObject {
         if let engine = engine, !engine.isRunning, !isPlaying {
             fileLog("Engine not running after downloads — signalling playlist end")
             hasHandledPlaylistEnd = true
-            onPlaylistFinished?()
+            onPlaylistFinished?(nil)
         }
 
         return successfulTracks
@@ -509,7 +519,7 @@ class AudioPlayer: ObservableObject {
         guard playerNode != nil, currentTrackIndex < audioFiles.count else {
             fileLog("  No player or current item, calling stop() directly")
             stop()
-            onStoppedAtTrackEnd?()
+            onStoppedAtTrackEnd?(nil)
             return
         }
         shouldStopAfterCurrentTrack = true

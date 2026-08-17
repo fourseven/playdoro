@@ -7,6 +7,8 @@ protocol MusicProvider: Sendable {
     func getNearest(trackId: String, limit: Int) async throws -> [Track]
     func streamURL(for track: Track) -> URL?
     func thumbURL(for track: Track) -> URL?
+    /// Record a completed play of `track` on the provider (e.g. Plex scrobble).
+    func reportPlay(for track: Track) async throws
 }
 
 extension MusicProvider {

@@ -296,19 +296,39 @@ class AppState: ObservableObject {
     }
 
     private func configurePlayerCallbacks() {
-        player.onTrackFinished = { [weak self] in
+        player.onTrackFinished = { [weak self] track in
+            self?.reportTrackPlay(track)
             self?.advanceToNextTrack()
         }
-        player.onPlaylistFinished = { [weak self] in
+        player.onPlaylistFinished = { [weak self] track in
+            if let track {
+                self?.reportTrackPlay(track)
+            }
             self?.finishAndReset()
         }
-        player.onStoppedAtTrackEnd = { [weak self] in
+        player.onStoppedAtTrackEnd = { [weak self] track in
+            if let track {
+                self?.reportTrackPlay(track)
+            }
             self?.finishAndReset()
         }
         player.onTrackDownloaded = { [weak self] track in
             guard let self = self else { return }
             if let idx = self.playlistTracks.firstIndex(where: { $0.id == track.id }) {
                 self.playlistTracks[idx].isDownloaded = true
+            }
+        }
+    }
+
+    /// Log a completed play to the provider (Plex scrobble). Fire-and-forget —
+    /// network failures must never interrupt the session flow.
+    private func reportTrackPlay(_ track: Track) {
+        Task {
+            guard let client = client else { return }
+            do {
+                try await client.reportPlay(for: track)
+            } catch {
+                log.warning("Failed to report play for \(track.title): \(error.localizedDescription)")
             }
         }
     }

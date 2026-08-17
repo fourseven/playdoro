@@ -5,8 +5,7 @@ struct SearchBar: View {
     let isSearching: Bool
     let searchResults: [Track]
     let searchError: String?
-    let serverURL: String
-    let token: String
+    let thumbURL: (Track) -> URL?
     let selectedSeeds: [Track]
     let maxSeeds: Int
     let onSearch: (String) -> Void
@@ -15,11 +14,6 @@ struct SearchBar: View {
     let onStart: ([Track]) -> Void
     var accentGradient: LinearGradient = Theme.accentGradient
     var accentColor: Color = Theme.accent
-
-    private func thumbURL(for track: Track) -> URL? {
-        guard let thumb = track.thumb else { return nil }
-        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
-    }
 
     private var selectedIds: Set<String> { Set(selectedSeeds.map(\.id)) }
     private var canAddMore: Bool { selectedSeeds.count < maxSeeds }
@@ -97,7 +91,7 @@ struct SearchBar: View {
             HStack(spacing: 8) {
                 ForEach(selectedSeeds) { track in
                     HStack(spacing: 6) {
-                        AlbumArt(url: thumbURL(for: track))
+                        AlbumArt(url: thumbURL(track))
                             .frame(width: 22, height: 22)
                             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                         Text(track.title)
@@ -131,7 +125,7 @@ struct SearchBar: View {
                         onAdd(track)
                     } label: {
                         HStack(spacing: 12) {
-                            AlbumArt(url: thumbURL(for: track))
+                            AlbumArt(url: thumbURL(track))
                                 .frame(width: 44, height: 44)
                                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 

@@ -33,7 +33,14 @@ private func fileErr(_ message: String) {
 }
 
 @MainActor
-class AudioPlayer: ObservableObject {
+class EnginePlaybackBackend: PlaybackBackend, EQProviding, VolumeProviding {
+    let capabilities: PlaybackCapabilities = .engine
+
+    /// Source of stream URLs. For Plex this is the `PlexClient`; the URL and
+    /// token are baked in, so the engine can download without knowing the
+    /// server topology.
+    private let provider: any StreamProviding
+
     @Published var isPlaying = false
     @Published var downloadProgress: Double = 0
     @Published var currentProgress: Double = 0
@@ -84,7 +91,8 @@ class AudioPlayer: ObservableObject {
     var onStoppedAtTrackEnd: ((Track?) -> Void)?
     var onTrackDownloaded: ((Track) -> Void)?
 
-    init() {
+    init(provider: any StreamProviding) {
+        self.provider = provider
         setupNotifications()
     }
 
@@ -520,6 +528,14 @@ class AudioPlayer: ObservableObject {
     private func beginDownloadBackgroundTask() {}
     private func endDownloadBackgroundTask() {}
     #endif
+
+    func play(tracks: [Track], totalSeconds: TimeInterval) async throws -> [Track] {
+        let urls = tracks.map { provider.streamURL(for: $0) }
+        guard !tracks.isEmpty, urls.count == tracks.count, urls.allSatisfy({ $0 != nil }) else {
+            throw PlaydoroError.noAudioURL
+        }
+        return await downloadAndPlay(tracks: tracks, urls: urls.compactMap { $0 })
+    }
 
     func downloadAndPlay(tracks: [Track], urls: [URL]) async -> [Track] {
         configureAudioSession()

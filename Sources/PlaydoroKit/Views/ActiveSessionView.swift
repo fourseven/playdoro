@@ -2,8 +2,6 @@ import SwiftUI
 
 struct ActiveSessionView: View {
     @ObservedObject var appState: AppState
-    let serverURL: String
-    let token: String
     @Binding var showSettings: Bool
 
     @State private var palette: AlbumPalette?
@@ -87,7 +85,10 @@ struct ActiveSessionView: View {
 
             trackInfo
             transportRow
-            volumeRow
+
+            if appState.supportsVolume {
+                volumeRow
+            }
 
             if appState.state == .finished {
                 Text("Pomodoro complete")
@@ -146,8 +147,7 @@ struct ActiveSessionView: View {
                 tracks: appState.playlistTracks,
                 currentTrackIndex: appState.currentTrackIndex,
                 isDownloading: appState.isDownloading,
-                serverURL: serverURL,
-                token: token,
+                thumbURL: { track in appState.catalog?.thumbURL(for: track) },
                 isSeed: { track in appState.seedTracks.contains(where: { $0.id == track.id }) },
                 accentColor: accentColor
             )
@@ -210,7 +210,7 @@ struct ActiveSessionView: View {
 
     private var transportRow: some View {
         VStack(spacing: 8) {
-            ProgressView(value: appState.player.currentProgress)
+            ProgressView(value: appState.currentProgress)
                 .progressViewStyle(.linear)
                 .tint(accentGradient)
 
@@ -232,8 +232,11 @@ struct ActiveSessionView: View {
             Image(systemName: "speaker.fill")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.55))
-            Slider(value: $appState.player.volume, in: 0...1)
-                .tint(.white.opacity(0.85))
+            Slider(value: Binding(
+                get: { appState.volume },
+                set: { appState.setVolume($0) }
+            ), in: 0...1)
+            .tint(.white.opacity(0.85))
             Image(systemName: "speaker.wave.3.fill")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.55))
@@ -288,9 +291,8 @@ struct ActiveSessionView: View {
 
     private var currentThumbURL: URL? {
         let i = appState.currentTrackIndex
-        guard i < appState.playlistTracks.count,
-              let thumb = appState.playlistTracks[i].thumb else { return nil }
-        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
+        guard i < appState.playlistTracks.count else { return nil }
+        return appState.catalog?.thumbURL(for: appState.playlistTracks[i])
     }
 
     private var currentTrackDurationSeconds: TimeInterval {
@@ -302,13 +304,13 @@ struct ActiveSessionView: View {
     private var currentTrackElapsed: String {
         let duration = currentTrackDurationSeconds
         guard duration > 0 else { return "0:00" }
-        return format(seconds: duration * appState.player.currentProgress)
+        return format(seconds: duration * appState.currentProgress)
     }
 
     private var currentTrackRemaining: String {
         let duration = currentTrackDurationSeconds
         guard duration > 0 else { return "0:00" }
-        let remaining = max(0, duration - duration * appState.player.currentProgress)
+        let remaining = max(0, duration - duration * appState.currentProgress)
         return "-" + format(seconds: remaining)
     }
 

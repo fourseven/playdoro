@@ -6,7 +6,7 @@ import UIKit
 
 private let log = Logger(label: AppIdentity.key("plexclient"))
 
-actor PlexClient: MusicProvider {
+actor PlexClient: MusicCatalog, StreamProviding {
     let serverURL: String
     let token: String
     /// Stable per-install client id, so Plex/Tautulli attribute every session to

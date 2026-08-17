@@ -27,7 +27,7 @@ struct PomodoroEngine {
         let maxDuration = target + config.tolerance
 
         // Respect caller-supplied order. For multi-seed runs the caller
-        // (`MusicProvider.getNearest(trackIds:)`) interleaves batches
+        // (MusicCatalog.getNearest(trackIds:)) interleaves batches
         // round-robin so this walk rotates across seeds; sorting globally by
         // raw per-seed distance here would re-introduce the cross-seed bias
         // (the tightest cluster floods the front of the sort).

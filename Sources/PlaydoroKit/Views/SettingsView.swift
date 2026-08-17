@@ -35,7 +35,9 @@ struct SettingsView: View {
         Form {
             if appState.isConfigured {
                 connectionSection
-                audioSection
+                if appState.supportsEQ {
+                    audioSection
+                }
                 playbackSection
                 Section {
                     Button("Disconnect", role: .destructive) {
@@ -174,9 +176,11 @@ struct SettingsView: View {
 
                 Divider()
 
-                macEQSection
+                if appState.supportsEQ {
+                    macEQSection
 
-                Divider()
+                    Divider()
+                }
 
                 macVarietySection
 

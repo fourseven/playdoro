@@ -168,8 +168,7 @@ struct ContentView: View {
                     if !appState.savedPlaylists.isEmpty {
                         RecentPlaylistsView(
                             playlists: appState.savedPlaylists,
-                            serverURL: appState.serverURL,
-                            token: appState.token,
+                            thumbURL: { track in appState.catalog?.thumbURL(for: track) },
                             onTap: { playlist in
                                 appState.startPomodoro(savedPlaylist: playlist)
                             }
@@ -181,8 +180,7 @@ struct ContentView: View {
                         isSearching: isSearching,
                         searchResults: searchResults,
                         searchError: searchError,
-                        serverURL: appState.serverURL,
-                        token: appState.token,
+                        thumbURL: { track in appState.catalog?.thumbURL(for: track) },
                         selectedSeeds: appState.seedTracks,
                         maxSeeds: PomodoroLimits.maxSeeds,
                         onSearch: searchDebounce,
@@ -229,15 +227,14 @@ struct ContentView: View {
 
     private var idleBackdropURL: URL? {
         if let playlist = appState.savedPlaylists.first,
-           let seed = playlist.seeds.first,
-           let thumb = seed.thumb {
-            return URL(string: "\(appState.serverURL)\(thumb)?X-Plex-Token=\(appState.token)")
+           let seed = playlist.seeds.first {
+            return appState.catalog?.thumbURL(for: seed)
         }
         return nil
     }
 
     private var activeView: some View {
-        ActiveSessionView(appState: appState, serverURL: appState.serverURL, token: appState.token, showSettings: $showSettings)
+        ActiveSessionView(appState: appState, showSettings: $showSettings)
     }
 
     private var settingsContent: some View {
@@ -267,10 +264,10 @@ struct ContentView: View {
 
     @MainActor
     private func performSearch(query: String, taskID: UUID) async {
-        guard let client = appState.client else { return }
+        guard let catalog = appState.catalog else { return }
 
         do {
-            let results = try await client.searchTracks(query: query)
+            let results = try await catalog.searchTracks(query: query)
             guard taskID == searchTaskID else { return }
             searchResults = results
             isSearching = false

@@ -4,8 +4,7 @@ struct PlaylistView: View {
     let tracks: [Track]
     let currentTrackIndex: Int
     let isDownloading: Bool
-    let serverURL: String
-    let token: String
+    let thumbURL: (Track) -> URL?
     let isSeed: (Track) -> Bool
     var accentColor: Color = Theme.accent
 
@@ -15,23 +14,16 @@ struct PlaylistView: View {
         tracks: [Track],
         currentTrackIndex: Int,
         isDownloading: Bool,
-        serverURL: String,
-        token: String,
+        thumbURL: @escaping (Track) -> URL?,
         isSeed: @escaping (Track) -> Bool = { _ in false },
         accentColor: Color = Theme.accent
     ) {
         self.tracks = tracks
         self.currentTrackIndex = currentTrackIndex
         self.isDownloading = isDownloading
-        self.serverURL = serverURL
-        self.token = token
+        self.thumbURL = thumbURL
         self.isSeed = isSeed
         self.accentColor = accentColor
-    }
-
-    private func thumbURL(for track: Track) -> URL? {
-        guard let thumb = track.thumb else { return nil }
-        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
     }
 
     private var upcoming: [(index: Int, track: Track)] {

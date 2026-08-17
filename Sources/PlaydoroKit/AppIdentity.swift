@@ -6,13 +6,13 @@ import Foundation
 enum AppIdentity {
     /// Display name, also sent to Plex as the client name in request headers
     /// (Product / Device / Model / Device-Name).
-    static let name = "Plexodoro"
+    static let name = "Playdoro"
 
     /// Version reported to Plex in the timeline/API headers.
     static let version = "1.0"
 
     /// Reverse-DNS namespace prefixing logger labels and persistence keys.
-    static let reverseDNS = "com.plexodoro"
+    static let reverseDNS = "com.playdoro"
 
     /// Scoped key for a UserDefaults key, cache subdirectory, logger label, etc.
     static func key(_ name: String) -> String {

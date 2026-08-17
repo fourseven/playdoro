@@ -10,7 +10,7 @@ actor PlexClient: MusicProvider {
     let serverURL: String
     let token: String
     /// Stable per-install client id, so Plex/Tautulli attribute every session to
-    /// the same "Plexodoro" client instead of a fresh random one per launch.
+    /// the same "Playdoro" client instead of a fresh random one per launch.
     let clientIdentifier: String
 
     private let decoder = JSONDecoder()
@@ -108,11 +108,11 @@ actor PlexClient: MusicProvider {
                         continuation.resume(returning: data)
                     } else {
                         log.error("Non-2xx status: \(httpResponse.statusCode)")
-                        continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                        continuation.resume(throwing: PlaydoroError.serverUnreachable)
                     }
                 } else {
                     log.error("No data or response")
-                    continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                    continuation.resume(throwing: PlaydoroError.serverUnreachable)
                 }
             }.resume()
         }
@@ -185,7 +185,7 @@ actor PlexClient: MusicProvider {
             .filter { $0.type == "artist" }
             .compactMap { Int($0.key) } ?? []
 
-        guard !ids.isEmpty else { throw PlexodoroError.serverUnreachable }
+        guard !ids.isEmpty else { throw PlaydoroError.serverUnreachable }
         cachedMusicSectionIDs = ids
         return ids
     }
@@ -265,7 +265,7 @@ actor PlexClient: MusicProvider {
 
     /// Report a live playback session for `track` to Plex's timeline API.
     /// `state = .playing` creates/advances a session that appears in Tautulli
-    /// and Plex Web under the Plexodoro client; `.stopped` at full duration
+    /// and Plex Web under the Playdoro client; `.stopped` at full duration
     /// ends it and marks the item watched. Sent by AppState on state changes
     /// and on a slow cadence while playing.
     func reportPlayback(for track: Track, time: TimeInterval, duration: TimeInterval, state: PlaybackState) async throws {

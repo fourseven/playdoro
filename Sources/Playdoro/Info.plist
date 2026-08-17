@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.mathewhartley.plexodoro</string>
+	<string>playdoro.mathewhartley.com</string>
 	<key>CFBundleName</key>
-	<string>Plexodoro</string>
+	<string>Playdoro</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

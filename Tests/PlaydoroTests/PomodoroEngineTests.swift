@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
-@testable import PlexodoroKit
+@testable import PlaydoroKit
 
 final class PomodoroEngineTests: XCTestCase {
     // MARK: - Helpers
@@ -374,7 +374,7 @@ final class DeduplicateForPackingTests: XCTestCase {
 
 final class ErrorDescriptionTests: XCTestCase {
     func testAllCasesReturnNonEmptyDescription() {
-        let cases: [PlexodoroError] = [
+        let cases: [PlaydoroError] = [
             .serverUnreachable,
             .trackUnavailable,
             .noSonicAnalysis,

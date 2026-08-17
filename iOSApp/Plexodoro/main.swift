@@ -1,3 +1,0 @@
-import PlexodoroKit
-
-PlexodoroApp.main()

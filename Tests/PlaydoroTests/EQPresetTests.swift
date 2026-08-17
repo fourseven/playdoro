@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
-@testable import PlexodoroKit
+@testable import PlaydoroKit
 
 final class EQPresetTests: XCTestCase {
 

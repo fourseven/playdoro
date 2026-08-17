@@ -1,12 +1,15 @@
-# Plexodoro
+# Playdoro
 
 A Pomodoro timer that plays music from your Plex library. Pick a seed track,
-set a focus length, and Plexodoro builds a shuffled playlist of similar tracks
+set a focus length, and Playdoro builds a shuffled playlist of similar tracks
 that fills the session as tightly as possible — downloading and caching audio
 ahead of time so playback never stalls.
 
 Runs as a **macOS menu-bar app** and an **iOS app** from a single Swift
-codebase (`PlexodoroKit`).
+codebase (`PlaydoroKit`).
+
+> **Renamed:** this was formerly *Plexodoro*. The codebase, repository, and
+> bundle IDs now use *Playdoro*; Plex remains the music provider for now.
 
 ## Screenshots
 
@@ -32,7 +35,7 @@ codebase (`PlexodoroKit`).
   handling.
 - **Provider-agnostic core** — `MusicProvider` protocol abstracts search,
   stream URLs, and session, so `PomodoroEngine` and `AudioPlayer` work
-  unchanged for any future provider.
+  unchanged for any future provider (Spotify, Tidal, …).
 
 ## Requirements
 
@@ -46,28 +49,28 @@ codebase (`PlexodoroKit`).
 ### macOS (Swift Package Manager)
 
 ```bash
-git clone <repo-url> && cd plexodoro
-swift run Plexodoro        # build + launch the menu-bar app
+git clone <repo-url> && cd playdoro
+swift run Playdoro        # build + launch the menu-bar app
 ```
 
-Or open `Package.swift` in Xcode and run the `Plexodoro` scheme.
+Or open `Package.swift` in Xcode and run the `Playdoro` scheme.
 
 ### iOS
 
 The iOS app is a separate Xcode project in `iOSApp/` that links the local
-`PlexodoroKit` package.
+`PlaydoroKit` package.
 
 ```bash
 # Simulator
-xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro \
+xcodebuild -project iOSApp/Playdoro.xcodeproj -scheme Playdoro \
   -destination "platform=iOS Simulator,name=iPhone 16 Pro" build
 
-# Device — open iOSApp/Plexodoro.xcodeproj in Xcode,
+# Device — open iOSApp/Playdoro.xcodeproj in Xcode,
 # set your Signing & Capabilities team, then build & run.
 ```
 
-> **Note:** the iOS project references `PlexodoroKit` pinned to `branch = main`.
-> Changes to `Sources/PlexodoroKit/*` only reach the iOS build once committed to
+> **Note:** the iOS project references `PlaydoroKit` pinned to `branch = main`.
+> Changes to `Sources/PlaydoroKit/*` only reach the iOS build once committed to
 > `main`. See `AGENTS.md` for the full SPM-resolution gotchas.
 
 ### Tests
@@ -108,7 +111,7 @@ SearchBar (seed track)
 
 ## AutoEQ presets
 
-The headphone EQ presets under `Sources/PlexodoroKit/Resources/EQPresets/` are
+The headphone EQ presets under `Sources/PlaydoroKit/Resources/EQPresets/` are
 sourced from the [AutoEQ](https://github.com/jaakkopasanen/AutoEq) project
 (commit `7ae0f56`, 2025-07-20) — 879 `ParametricEQ.txt` files from oratory1990
 (736) and Kazi (143). All credit for the measurements and corrections belongs
@@ -135,14 +138,14 @@ are never hardcoded or logged in full.
 
 | Path                                        | Role                                                   |
 | ------------------------------------------- | ------------------------------------------------------ |
-| `Sources/PlexodoroKit/`                     | Shared library — app, views, networking, audio, engine |
-| `Sources/Plexodoro/`                        | macOS executable thin entrypoint                       |
-| `iOSApp/Plexodoro/`                         | iOS Xcode project (separate `.xcodeproj`)              |
-| `Tests/PlexodoroTests/`                     | XCTest suites                                          |
-| `Sources/PlexodoroKit/Resources/EQPresets/` | Bundled AutoEQ preset files                            |
+| `Sources/PlaydoroKit/`                      | Shared library — app, views, networking, audio, engine |
+| `Sources/Playdoro/`                         | macOS executable thin entrypoint                       |
+| `iOSApp/Playdoro/`                          | iOS Xcode project (separate `.xcodeproj`)              |
+| `Tests/PlaydoroTests/`                      | XCTest suites                                          |
+| `Sources/PlaydoroKit/Resources/EQPresets/`  | Bundled AutoEQ preset files                            |
 
 ## License
 
 [MIT](LICENSE) — © Mathew Hartley. The bundled AutoEQ presets under
-`Sources/PlexodoroKit/Resources/EQPresets/` remain under their upstream
+`Sources/PlaydoroKit/Resources/EQPresets/` remain under their upstream
 licenses; see the [AutoEQ project](https://github.com/jaakkopasanen/AutoEq).

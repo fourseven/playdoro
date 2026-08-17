@@ -1,7 +1,7 @@
 import SwiftUI
 import Logging
 
-public struct PlexodoroApp: App {
+public struct PlaydoroApp: App {
     @StateObject private var appState = AppState()
 
     public init() {

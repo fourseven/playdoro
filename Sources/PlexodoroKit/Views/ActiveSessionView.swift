@@ -76,6 +76,15 @@ struct ActiveSessionView: View {
         VStack(spacing: 14) {
             albumHero
             timerBlock
+
+            if let warning = appState.sessionWarning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.yellow.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 4)
+            }
+
             trackInfo
             transportRow
             volumeRow
@@ -100,6 +109,14 @@ struct ActiveSessionView: View {
             albumHero
 
             timerBlock
+
+            if let warning = appState.sessionWarning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.yellow.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 4)
+            }
 
             trackInfo
 

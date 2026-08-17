@@ -10,6 +10,7 @@ class AppState: ObservableObject {
     @Published var timeRemaining: TimeInterval = 25 * 60
     @Published var currentTrackTitle: String = ""
     @Published var errorMessage: String?
+    @Published var sessionWarning: String?
 
     @Published var connectionState: ConnectionState = .disconnected
     @Published var authCode: String = ""
@@ -227,6 +228,7 @@ class AppState: ObservableObject {
         }
 
         errorMessage = nil
+        sessionWarning = nil
         state = .running
 
         Task {
@@ -359,6 +361,19 @@ class AppState: ObservableObject {
             timerSubscription?.cancel()
             state = .idle
             return
+        }
+
+        // Rebase the pomodoro clock onto the tracks that actually downloaded:
+        // the timer was started from the PLANNED total when playback began, so
+        // fold in the time already counted and measure the remainder against
+        // the real playlist length, not the ideal one.
+        let elapsed = min(totalSeconds, max(0, totalSeconds - timeRemaining))
+        let actualTotal = playlistTracks.reduce(TimeInterval(0)) { $0 + $1.duration / 1000 }
+        timeRemaining = max(0, actualTotal - elapsed)
+
+        let missing = tracks.count - playlistTracks.count
+        if missing > 0 {
+            sessionWarning = "\(missing) of \(tracks.count) tracks couldn't be downloaded — playing \(playlistTracks.count)"
         }
 
         recordPlaylist(seeds: self.seedTracks)
@@ -547,6 +562,7 @@ class AppState: ObservableObject {
         currentTrackIndex = 0
         seedTracks = []
         errorMessage = nil
+        sessionWarning = nil
         startTimerCancellable?.cancel()
         startTimerCancellable = nil
     }

@@ -70,6 +70,7 @@ class AudioPlayer: ObservableObject {
     #endif
 
     private static let maxConcurrentDownloads = 4
+    private static let maxDownloadAttempts = 3
 
     private let cache = TrackCache()
     private let session: URLSession = {
@@ -285,7 +286,7 @@ class AudioPlayer: ObservableObject {
         let url: URL
     }
 
-    private func downloadStream(tracks: [Track], urls: [URL]) -> AsyncStream<LocalTrack> {
+    private func downloadStream(tracks: [Track], urls: [URL], sessionID: UUID) -> AsyncStream<LocalTrack> {
         AsyncStream { continuation in
             Task {
                 let collector = DownloadCollector(tracks: tracks, continuation: continuation)
@@ -294,7 +295,7 @@ class AudioPlayer: ObservableObject {
                     for (i, url) in urls.enumerated() {
                         group.addTask {
                             await semaphore.wait()
-                            let local = await self.downloadTrack(i, url: url, track: tracks[i])
+                            let local = await self.downloadTrack(i, url: url, track: tracks[i], sessionID: sessionID)
                             await semaphore.signal()
                             await collector.complete(index: i, result: local)
                         }
@@ -376,7 +377,7 @@ class AudioPlayer: ObservableObject {
         }
     }
 
-    private func downloadTrack(_ i: Int, url: URL, track: Track) async -> URL? {
+    private func downloadTrack(_ i: Int, url: URL, track: Track, sessionID: UUID) async -> URL? {
         fileLog("Downloading track \(i): \(track.title)")
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             fileErr("Failed to create URLComponents for track \(i)")
@@ -394,35 +395,90 @@ class AudioPlayer: ObservableObject {
             return cachedURL
         }
 
+        var attempt = 1
+        while true {
+            // Stop wasting retries if the user already stopped the session.
+            guard playSessionID == sessionID else {
+                fileLog("  Track \(i) download cancelled (session expired)")
+                return nil
+            }
+
+            switch await attemptFetch(i, secureURL, track, extension: ext) {
+            case .done(let localURL):
+                fileLog("  Saved → \(localURL.lastPathComponent)")
+                return localURL
+            case .permanent:
+                return nil
+            case .retryable:
+                attempt += 1
+                guard attempt <= Self.maxDownloadAttempts else {
+                    fileErr("  Track \(i) failed after \(Self.maxDownloadAttempts) attempts")
+                    return nil
+                }
+                let delay = Self.retryDelay(forAttempt: attempt)
+                fileLog("  Track \(i) failed; retrying in \(String(format: "%.1f", delay))s (attempt \(attempt)/\(Self.maxDownloadAttempts))")
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+        }
+    }
+
+    private enum FetchResult {
+        case done(URL)
+        case retryable
+        case permanent
+    }
+
+    private func attemptFetch(_ i: Int, _ url: URL, _ track: Track, extension ext: String) async -> FetchResult {
         do {
-            let (data, response) = try await self.session.data(from: secureURL)
+            let (data, response) = try await self.session.data(from: url)
             if let httpResponse = response as? HTTPURLResponse {
                 fileLog("  HTTP \(httpResponse.statusCode), \(data.count) bytes for track \(i)")
                 guard httpResponse.statusCode == 200 else {
                     let preview = String(data: data.prefix(200), encoding: .utf8) ?? "<binary>"
                     fileErr("  HTTP \(httpResponse.statusCode) — body: \(preview)")
-                    return nil
+                    return .permanent
                 }
             }
             guard data.count >= 1000 else {
                 let preview = String(data: data, encoding: .utf8) ?? "<binary>"
                 fileErr("  Too small (\(data.count) bytes): \(preview)")
-                return nil
+                return .permanent
             }
 
             let localURL = try await cache.store(data: data, for: track, extension: ext)
-            fileLog("  Saved → \(localURL.lastPathComponent)")
-            return localURL
+            return .done(localURL)
         } catch {
             let nsError = error as NSError
             fileErr("  Failed: \(error.localizedDescription)")
-            fileErr("    URL: \(secureURL.absoluteString)")
+            fileErr("    URL: \(url.absoluteString)")
             fileErr("    domain=\(nsError.domain) code=\(nsError.code)")
             if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
                 fileErr("    underlying: \(underlying.domain):\(underlying.code) \(underlying.localizedDescription)")
             }
-            return nil
+            return Self.isRetryableError(nsError) ? .retryable : .permanent
         }
+    }
+
+    /// Transient network failures are worth a retry (dropped connections,
+    /// timeouts); HTTP 4xx/5xx, tiny payloads, TLS and disk errors are not.
+    private static func isRetryableError(_ nsError: NSError) -> Bool {
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorTimedOut, NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost,
+                 NSURLErrorNetworkConnectionLost, NSURLErrorNotConnectedToInternet,
+                 NSURLErrorDNSLookupFailed, NSURLErrorBadServerResponse:
+                return true
+            default:
+                return false
+            }
+        }
+        // CFNetwork also surfaces -1005 (e.g. "The network connection was lost").
+        return nsError.domain == (kCFErrorDomainCFNetwork as String) && nsError.code == NSURLErrorNetworkConnectionLost
+    }
+
+    /// Exponential backoff between attempts: 0.5s then 1s for the default 3 attempts.
+    private static func retryDelay(forAttempt attempt: Int) -> TimeInterval {
+        min(4, 0.5 * pow(2.0, Double(attempt - 2)))
     }
 
     // MARK: - Download & Play
@@ -474,7 +530,7 @@ class AudioPlayer: ObservableObject {
         beginDownloadBackgroundTask()
         var successfulTracks: [Track] = []
 
-        for await local in downloadStream(tracks: tracks, urls: urls) {
+        for await local in downloadStream(tracks: tracks, urls: urls, sessionID: sessionID) {
             guard playSessionID == sessionID else { return cancelSession() }
             enqueueDownloadedTrack(local: local, sessionID: sessionID, successfulTracks: &successfulTracks)
         }

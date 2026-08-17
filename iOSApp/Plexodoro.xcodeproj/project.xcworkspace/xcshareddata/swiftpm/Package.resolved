@@ -7,7 +7,7 @@
       "location" : "/Users/mathew/Development/plexodoro",
       "state" : {
         "branch" : "main",
-        "revision" : "7f4b27f29e259f6f26d004e4c03b98485d6f46e9"
+        "revision" : "1cf7ae6194597d2295040ffb1de11e02ee3dca74"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "92448c359f00ebe36ae97d3bd9086f13c7692b5a",
-        "version" : "1.13.2"
+        "revision" : "3ffafb9722d5d918c614feb496c8789a3b59d222",
+        "version" : "1.15.0"
       }
     }
   ],

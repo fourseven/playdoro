@@ -2,12 +2,12 @@
   "originHash" : "3771c650e7c4233db518e1c1997e9e24d9ef577fd81ca28eb8ca653ca563f40a",
   "pins" : [
     {
-      "identity" : "plexodoro",
+      "identity" : "playdoro",
       "kind" : "localSourceControl",
-      "location" : "/Users/mathew/Development/plexodoro",
+      "location" : "/Users/mathew/Development/playdoro",
       "state" : {
         "branch" : "main",
-        "revision" : "45f0378e11a24aa160d6e619e0df9c3be361c797"
+        "revision" : "0000000000000000000000000000000000000000"
       }
     },
     {

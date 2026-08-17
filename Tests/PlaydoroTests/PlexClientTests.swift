@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
-@testable import PlexodoroKit
+@testable import PlaydoroKit
 
 final class PlexClientTests: XCTestCase {
     func testSearchURLPercentEncodesPlusSign() async throws {

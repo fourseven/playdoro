@@ -11,7 +11,7 @@ private let session: URLSession = {
 
 private let cacheDirectory: URL = {
     let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        .appendingPathComponent("plexodoro/albumart", isDirectory: true)
+        .appendingPathComponent(AppIdentity.key("albumart"), isDirectory: true)
     do {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         log.info("Cache dir: \(dir.path)")

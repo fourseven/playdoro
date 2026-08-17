@@ -189,7 +189,7 @@ class AppState: ObservableObject {
         log.info("Racing \(uris.count) candidate URIs in parallel…")
         guard let uri = await raceProbe(uris: uris, token: token) else {
             log.error("All \(uris.count) candidate URIs failed probe")
-            throw PlexodoroError.serverUnreachable
+            throw PlaydoroError.serverUnreachable
         }
 
         log.info("Probe won at \(uri) — confirming with full ping")
@@ -479,7 +479,7 @@ class AppState: ObservableObject {
             for seed in seedTracks {
                 group.addTask {
                     guard let track = try await client.getTrack(id: seed.id) else {
-                        throw PlexodoroError.trackUnavailable
+                        throw PlaydoroError.trackUnavailable
                     }
                     return track
                 }
@@ -504,7 +504,7 @@ class AppState: ObservableObject {
         let urls: [URL] = packed.compactMap { client.streamURL(for: $0) }
 
         guard urls.count == packed.count else {
-            throw PlexodoroError.noAudioURL
+            throw PlaydoroError.noAudioURL
         }
 
         return (packed, urls, totalSeconds)

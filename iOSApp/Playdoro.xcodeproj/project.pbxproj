@@ -8,14 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		000000000000000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000002 /* main.swift */; };
-		000000000000000000000018 /* PlexodoroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000019 /* PlexodoroKit */; };
-		000000000000000000000021 /* Plexodoro/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000004 /* Plexodoro/Assets.xcassets */; };
+		000000000000000000000018 /* PlaydoroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000019 /* PlaydoroKit */; };
+		000000000000000000000021 /* Playdoro/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000004 /* Playdoro/Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000002 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		000000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		000000000000000000000004 /* Plexodoro/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Plexodoro/Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000004 /* Playdoro/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Playdoro/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -23,36 +23,36 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				000000000000000000000018 /* PlexodoroKit in Frameworks */,
+				000000000000000000000018 /* PlaydoroKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		000000000000000000000006 /* Plexodoro */ = {
+		000000000000000000000006 /* Playdoro */ = {
 			isa = PBXGroup;
 			children = (
 				000000000000000000000002 /* main.swift */,
 			);
-			path = Plexodoro;
+			path = Playdoro;
 			sourceTree = "<group>";
 		};
 		000000000000000000000007 = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000006 /* Plexodoro */,
+				000000000000000000000006 /* Playdoro */,
 				000000000000000000000003 /* Info.plist */,
-				000000000000000000000004 /* Plexodoro/Assets.xcassets */,
+				000000000000000000000004 /* Playdoro/Assets.xcassets */,
 			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		000000000000000000000008 /* Plexodoro */ = {
+		000000000000000000000008 /* Playdoro */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 000000000000000000000015 /* Build configuration list for PBXNativeTarget "Plexodoro" */;
+			buildConfigurationList = 000000000000000000000015 /* Build configuration list for PBXNativeTarget "Playdoro" */;
 			buildPhases = (
 				000000000000000000000011 /* Sources */,
 				000000000000000000000005 /* Frameworks */,
@@ -62,11 +62,11 @@
 			);
 			dependencies = (
 			);
-			name = Plexodoro;
+			name = Playdoro;
 			packageProductDependencies = (
-				000000000000000000000019 /* PlexodoroKit */,
+				000000000000000000000019 /* PlaydoroKit */,
 			);
-			productName = Plexodoro;
+			productName = Playdoro;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -79,7 +79,7 @@
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1600;
 			};
-			buildConfigurationList = 000000000000000000000014 /* Build configuration list for PBXProject "Plexodoro" */;
+			buildConfigurationList = 000000000000000000000014 /* Build configuration list for PBXProject "Playdoro" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -89,13 +89,13 @@
 			);
 			mainGroup = 000000000000000000000007;
 			packageReferences = (
-				000000000000000000000020 /* XCRemoteSwiftPackageReference "plexodoro" */,
+				000000000000000000000020 /* XCRemoteSwiftPackageReference "playdoro" */,
 			);
-			productRefGroup = 000000000000000000000006 /* Plexodoro */;
+			productRefGroup = 000000000000000000000006 /* Playdoro */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				000000000000000000000008 /* Plexodoro */,
+				000000000000000000000008 /* Playdoro */,
 			);
 		};
 /* End PBXProject section */
@@ -105,7 +105,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				000000000000000000000021 /* Plexodoro/Assets.xcassets in Resources */,
+				000000000000000000000021 /* Playdoro/Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -182,8 +182,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 88X59PVX4X;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Plexodoro/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Plexodoro;
+				INFOPLIST_FILE = Playdoro/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Playdoro;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -193,7 +193,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mathewhartley.plexodoro;
+				PRODUCT_BUNDLE_IDENTIFIER = playdoro.mathewhartley.com;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -209,8 +209,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 88X59PVX4X;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Plexodoro/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Plexodoro;
+				INFOPLIST_FILE = Playdoro/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Playdoro;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -220,7 +220,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mathewhartley.plexodoro;
+				PRODUCT_BUNDLE_IDENTIFIER = playdoro.mathewhartley.com;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -231,7 +231,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		000000000000000000000014 /* Build configuration list for PBXProject "Plexodoro" */ = {
+		000000000000000000000014 /* Build configuration list for PBXProject "Playdoro" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				000000000000000000000012 /* Debug */,
@@ -240,7 +240,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		000000000000000000000015 /* Build configuration list for PBXNativeTarget "Plexodoro" */ = {
+		000000000000000000000015 /* Build configuration list for PBXNativeTarget "Playdoro" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				000000000000000000000016 /* Debug */,
@@ -252,9 +252,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		000000000000000000000020 /* XCRemoteSwiftPackageReference "plexodoro" */ = {
+		000000000000000000000020 /* XCRemoteSwiftPackageReference "playdoro" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "file:///Users/mathew/Development/plexodoro";
+			repositoryURL = "file:///Users/mathew/Development/playdoro";
 			requirement = {
 				branch = main;
 				kind = branch;
@@ -263,10 +263,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		000000000000000000000019 /* PlexodoroKit */ = {
+		000000000000000000000019 /* PlaydoroKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 000000000000000000000020 /* XCRemoteSwiftPackageReference "plexodoro" */;
-			productName = PlexodoroKit;
+			package = 000000000000000000000020 /* XCRemoteSwiftPackageReference "playdoro" */;
+			productName = PlaydoroKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

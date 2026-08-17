@@ -2,20 +2,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "Plexodoro",
+    name: "Playdoro",
     platforms: [
         .macOS(.v14),
         .iOS(.v17),
     ],
     products: [
-        .library(name: "PlexodoroKit", targets: ["PlexodoroKit"]),
+        .library(name: "PlaydoroKit", targets: ["PlaydoroKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
         .target(
-            name: "PlexodoroKit",
+            name: "PlaydoroKit",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
             ],
@@ -24,16 +24,16 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "Plexodoro",
+            name: "Playdoro",
             dependencies: [
-                "PlexodoroKit",
+                "PlaydoroKit",
             ],
             exclude: ["Info.plist"]
         ),
         .testTarget(
-            name: "PlexodoroTests",
+            name: "PlaydoroTests",
             dependencies: [
-                "PlexodoroKit",
+                "PlaydoroKit",
             ]
         ),
     ]

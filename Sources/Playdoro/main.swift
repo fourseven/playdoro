@@ -1,0 +1,3 @@
+import PlaydoroKit
+
+PlaydoroApp.main()

@@ -2,9 +2,9 @@ import Foundation
 
 enum UserDefaultsKey {
     static let serverURL = "serverURL"
-    static let plexToken = "plexToken"
-    static let serverName = "serverName"
-    static let plexClientId = "plexClientId"
+    static let plexToken = "playdoro.plex.token"
+    static let serverName = "playdoro.serverName"
+    static let plexClientId = "playdoro.plex.clientId"
     static let savedPlaylists = "savedPlaylists"
     static let eqPresetID = "eqPresetID"
     static let recentEQPresetIDs = "recentEQPresetIDs"
@@ -208,7 +208,7 @@ struct PomodoroConfig {
     static let `default` = PomodoroConfig()
 }
 
-enum PlexodoroError: LocalizedError {
+enum PlaydoroError: LocalizedError {
     case serverUnreachable
     case trackUnavailable
     case noSonicAnalysis

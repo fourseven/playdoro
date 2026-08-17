@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
-@testable import PlexodoroKit
+@testable import PlaydoroKit
 
 final class TrackCacheTests: XCTestCase {
     private var cacheDirectory: URL!

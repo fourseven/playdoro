@@ -1,4 +1,4 @@
-# Plexodoro
+# Playdoro
 
 macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
 
@@ -6,13 +6,13 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
 
 - `swift build` — build (macOS)
 - `swift test` — run all tests (XCTest, 36 cases across 7 suites)
-- **iOS simulator:** `xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
+- **iOS simulator:** `xcodebuild -project iOSApp/Playdoro.xcodeproj -scheme Playdoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
 - **iOS device:** build then install/launch via `devicectl`:
   ```bash
-  xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro \
+  xcodebuild -project iOSApp/Playdoro.xcodeproj -scheme Playdoro \
     -destination "platform=iOS,id=<devicectl-id>" \
     -allowProvisioningUpdates DEVELOPMENT_TEAM=<your-team-id> build
-  APP=~/Library/Developer/Xcode/DerivedData/Plexodoro-*/Build/Products/Debug-iphoneos/Plexodoro.app
+  APP=~/Library/Developer/Xcode/DerivedData/Playdoro-*/Build/Products/Debug-iphoneos/Playdoro.app
   xcrun devicectl device install app --device <devicectl-id> "$APP"
   xcrun devicectl device process launch --device <devicectl-id> <bundle-id>
   ```
@@ -20,7 +20,7 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
   - The development team is set via `DEVELOPMENT_TEAM` in the pbxproj build settings (Debug + Release); override on the CLI or in the Xcode GUI as needed.
   - **Signing/cert errors** ("profile doesn't include certificate", "device isn't registered"): resolve in the **Xcode GUI** — open the project, target → Signing & Capabilities → Automatic + select the team. Xcode regenerates the dev cert and registers the connected device where `xcodebuild -allowProvisioningUpdates` alone won't. Keep the device unlocked.
 - No lint, formatter, or CI configured.
-- SPM package at repo root produces two products: the `Plexodoro` macOS executable and the `PlexodoroKit` library (linked by both the macOS executable and the iOS Xcode project). The iOS app lives in a separate `iOSApp/Plexodoro.xcodeproj` (`DerivedData/` gitignored).
+- SPM package at repo root produces two products: the `Playdoro` macOS executable and the `PlaydoroKit` library (linked by both the macOS executable and the iOS Xcode project). The iOS app lives in a separate `iOSApp/Playdoro.xcodeproj` (`DerivedData/` gitignored).
 
 ## Dependencies
 
@@ -29,7 +29,7 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
 
 ## Architecture
 
-- **Entrypoint:** `Sources/PlexodoroKit/PlexodoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS). Both apps (`Sources/Plexodoro/main.swift` and `iOSApp/Plexodoro/main.swift`) just call `PlexodoroApp.main()` from PlexodoroKit.
+- **Entrypoint:** `Sources/PlaydoroKit/PlaydoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS). Both apps (`Sources/Playdoro/main.swift` and `iOSApp/Playdoro/main.swift`) just call `PlaydoroApp.main()` from PlaydoroKit.
 - **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicProvider` + `AudioPlayer` directly
 - **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (provider-agnostic; other backends could be added)
 - **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicProvider`) — Plex HTTP API with self-signed cert support via `CertDelegate`
@@ -50,7 +50,7 @@ Music provider is a protocol so the backend is swappable:
 
 | File | Role |
 |------|------|
-| `PlexodoroApp.swift` | Entrypoint — `@main` App struct only (macOS MenuBarExtra / iOS WindowGroup) |
+| `PlaydoroApp.swift` | Entrypoint — `@main` App struct only (macOS MenuBarExtra / iOS WindowGroup) |
 | `ContentView.swift` | Root content router (idle, active, settings, connection states) |
 | `ActiveSessionView.swift` | Running pomodoro view (timer, album art, playlist, volume slider, controls) |
 | `PlaylistView.swift` | Track list during active session |
@@ -69,9 +69,9 @@ Music provider is a protocol so the backend is swappable:
 | `Models.swift` | Track, JSON decoding types (CodingKeys), errors |
 | `AlbumArt.swift` | Async album art via URLSession + CertDelegate |
 | `CertDelegate.swift` | Trusts all server certs (self-signed Plex on LAN) |
-| `Tests/PlexodoroTests/PomodoroEngineTests.swift` | 3 test classes, 16 cases (PomodoroEngineTests, DeduplicateTests, ErrorDescriptionTests) |
-| `Tests/PlexodoroTests/TrackCacheTests.swift` | Cache store/retrieve, eviction, and LRU ordering tests |
-| `Tests/PlexodoroTests/EQPresetTests.swift` | 17 cases — AutoEQ parser, legacy ID migration, catalog sanity |
+| `Tests/PlaydoroTests/PomodoroEngineTests.swift` | 3 test classes, 16 cases (PomodoroEngineTests, DeduplicateTests, ErrorDescriptionTests) |
+| `Tests/PlaydoroTests/TrackCacheTests.swift` | Cache store/retrieve, eviction, and LRU ordering tests |
+| `Tests/PlaydoroTests/EQPresetTests.swift` | 17 cases — AutoEQ parser, legacy ID migration, catalog sanity |
 
 ## Quirks & Gotchas
 
@@ -83,8 +83,8 @@ Music provider is a protocol so the backend is swappable:
 - Tracks download sequentially to a bounded on-disk cache before `AVAudioEngine` starts; cache persists across sessions
 - Audio log at `<tmp>/plexodoro_audio_player.log` (OSLog + file)
 - Git workflow: features land on `main` (see iOS SPM note below for why `main` matters)
-- **iOS Xcode project + SPM:** the iOS app references the local package by `file://` URL with `branch = main`. SPM does a real git checkout, so **working-tree changes to `Sources/PlexodoroKit/*` are not seen by the iOS build until committed**. `PlexodoroKit` must remain declared as a `.library` product in `Package.swift` (not just a target) or the iOS app fails with "Missing package product 'PlexodoroKit'".
-- **iOS builds read `PlexodoroKit` from `main`:** because the iOS package ref is pinned to `branch = main`, `PlexodoroKit` changes must land **on `main`** before the iOS build can see them — a feature branch alone won't do. If your workflow blocks direct commits to `main`, commit on a throwaway branch then fast-forward `main` (the FF is a `git switch`/`git merge`, not a `git commit`):
+- **iOS Xcode project + SPM:** the iOS app references the local package by `file://` URL with `branch = main`. SPM does a real git checkout, so **working-tree changes to `Sources/PlaydoroKit/*` are not seen by the iOS build until committed**. `PlaydoroKit` must remain declared as a `.library` product in `Package.swift` (not just a target) or the iOS app fails with "Missing package product 'PlaydoroKit'".
+- **iOS builds read `PlaydoroKit` from `main`:** because the iOS package ref is pinned to `branch = main`, `PlaydoroKit` changes must land **on `main`** before the iOS build can see them — a feature branch alone won't do. If your workflow blocks direct commits to `main`, commit on a throwaway branch then fast-forward `main` (the FF is a `git switch`/`git merge`, not a `git commit`):
   ```bash
   git switch -c feat/<desc>
   git commit -m "…"
@@ -92,12 +92,12 @@ Music provider is a protocol so the backend is swappable:
   git merge --ff-only feat/<desc>         # lands commit on main, no new commit
   git branch -d feat/<desc>
   ```
-- **iOS SPM pin stickiness (important):** even after committing, SPM with `branch = main` on a local package does **not** auto-bump to new commits on rebuild — it stays pinned to whatever revision was first resolved (recorded in `iOSApp/Plexodoro.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`). `xcodebuild build` and `xcodebuild -resolvePackageDependencies` both happily re-use the stale pin. To force the iOS build to pick up a new commit in `PlexodoroKit`, nuke the project's DerivedData entirely:
+- **iOS SPM pin stickiness (important):** even after committing, SPM with `branch = main` on a local package does **not** auto-bump to new commits on rebuild — it stays pinned to whatever revision was first resolved (recorded in `iOSApp/Playdoro.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`). `xcodebuild build` and `xcodebuild -resolvePackageDependencies` both happily re-use the stale pin. To force the iOS build to pick up a new commit in `PlaydoroKit`, nuke the project's DerivedData entirely:
   ```bash
-  rm -rf ~/Library/Developer/Xcode/DerivedData/Plexodoro-*
-  rm -f iOSApp/Plexodoro.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-  xcodebuild -project iOSApp/Plexodoro.xcodeproj -scheme Plexodoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build
+  rm -rf ~/Library/Developer/Xcode/DerivedData/Playdoro-*
+  rm -f iOSApp/Playdoro.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+  xcodebuild -project iOSApp/Playdoro.xcodeproj -scheme Playdoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build
   ```
-  Deleting `Package.resolved` alone is NOT enough — Xcode regenerates it from cached state. Verify the right commit was used by checking the built binary: `strings <app>/Plexodoro.debug.dylib | grep '<some-new-string>'`. Symptom of stale pin: iOS runtime behaviour doesn't match what you see in `Sources/PlexodoroKit/*` on disk.
-- **iOS Xcode project paths:** all source/asset files live in `iOSApp/Plexodoro/` (not `iOSApp/Sources/`). The pbxproj group `path = Plexodoro`, `INFOPLIST_FILE = Plexodoro/Info.plist`, and `Assets.xcassets` fileRef path is `Plexodoro/Assets.xcassets` — keep these consistent if rearranging files.
-- **iOS background audio:** screen locks normally during playback (no idle-timer wake lock). Audio continues in the background via `UIBackgroundModes: audio` (`iOSApp/Plexodoro/Info.plist`) + `AVAudioSession.setCategory(.playback)` (in `AudioPlayer.configureAudioSession`). `AudioPlayer` also observes `AVAudioSession.interruptionNotification` and `.AVAudioEngineConfigurationChange` to reschedule the current track from `accumulatedPlayTime` after interruptions/route swaps.
+  Deleting `Package.resolved` alone is NOT enough — Xcode regenerates it from cached state. Verify the right commit was used by checking the built binary: `strings <app>/Playdoro.debug.dylib | grep '<some-new-string>'`. Symptom of stale pin: iOS runtime behaviour doesn't match what you see in `Sources/PlaydoroKit/*` on disk.
+- **iOS Xcode project paths:** all source/asset files live in `iOSApp/Playdoro/` (not `iOSApp/Sources/`). The pbxproj group `path = Playdoro`, `INFOPLIST_FILE = Playdoro/Info.plist`, and `Assets.xcassets` fileRef path is `Playdoro/Assets.xcassets` — keep these consistent if rearranging files.
+- **iOS background audio:** screen locks normally during playback (no idle-timer wake lock). Audio continues in the background via `UIBackgroundModes: audio` (`iOSApp/Playdoro/Info.plist`) + `AVAudioSession.setCategory(.playback)` (in `AudioPlayer.configureAudioSession`). `AudioPlayer` also observes `AVAudioSession.interruptionNotification` and `.AVAudioEngineConfigurationChange` to reschedule the current track from `accumulatedPlayTime` after interruptions/route swaps.

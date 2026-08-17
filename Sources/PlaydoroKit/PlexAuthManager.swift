@@ -21,7 +21,7 @@ actor PlexAuthManager {
             self.clientId = saved
         } else {
             let suffix = UUID().uuidString.prefix(8)
-            let id = "plexodoro-\(suffix)"
+            let id = "playdoro-\(suffix)"
             UserDefaults.standard.set(id, forKey: UserDefaultsKey.plexClientId)
             self.clientId = id
         }
@@ -82,7 +82,7 @@ actor PlexAuthManager {
             }
             log.trace("Polling… no auth yet")
         }
-        throw PlexodoroError.authTimeout
+        throw PlaydoroError.authTimeout
     }
 
     /// Discover Plex servers and return server name + all connection URIs to try.
@@ -109,12 +109,12 @@ actor PlexAuthManager {
         log.info("Found \(servers.count) servers")
 
         guard let server = servers.first(where: { $0.owned ?? false }) ?? servers.first else {
-            throw PlexodoroError.noServerFound
+            throw PlaydoroError.noServerFound
         }
 
         guard let connections = server.connections, !connections.isEmpty else {
             log.warning("Server '\(server.name)' has no connections")
-            throw PlexodoroError.noServerFound
+            throw PlaydoroError.noServerFound
         }
 
         for c in connections {
@@ -144,7 +144,7 @@ actor PlexAuthManager {
 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     log.error("No HTTP response")
-                    continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                    continuation.resume(throwing: PlaydoroError.serverUnreachable)
                     return
                 }
 
@@ -154,14 +154,14 @@ actor PlexAuthManager {
 
                 guard (200...299).contains(httpResponse.statusCode) else {
                     log.error("Unexpected status: \(httpResponse.statusCode)")
-                    continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                    continuation.resume(throwing: PlaydoroError.serverUnreachable)
                     return
                 }
 
                 if let data = data {
                     continuation.resume(returning: data)
                 } else {
-                    continuation.resume(throwing: PlexodoroError.serverUnreachable)
+                    continuation.resume(throwing: PlaydoroError.serverUnreachable)
                 }
             }.resume()
         }

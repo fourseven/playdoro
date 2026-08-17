@@ -62,6 +62,15 @@ class AudioPlayer: ObservableObject {
     private var configChangeObserver: NSObjectProtocol?
     private var wasPlayingBeforeInterruption = false
 
+    // iOS-only: keeps the process alive during the download phase before the
+    // first track has started playing. Once audio is actually playing the
+    // audio background mode protects the app, so the task is released.
+    #if canImport(UIKit)
+    private var backgroundTaskID: UIBackgroundTaskIdentifier?
+    #endif
+
+    private static let maxConcurrentDownloads = 4
+
     private let cache = TrackCache()
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -279,12 +288,90 @@ class AudioPlayer: ObservableObject {
     private func downloadStream(tracks: [Track], urls: [URL]) -> AsyncStream<LocalTrack> {
         AsyncStream { continuation in
             Task {
-                for (i, url) in urls.enumerated() {
-                    if let localURL = await downloadTrack(i, url: url, track: tracks[i]) {
-                        continuation.yield(LocalTrack(track: tracks[i], url: localURL))
+                let collector = DownloadCollector(tracks: tracks, continuation: continuation)
+                let semaphore = DownloadSemaphore(limit: Self.maxConcurrentDownloads)
+                await withTaskGroup(of: Void.self) { group in
+                    for (i, url) in urls.enumerated() {
+                        group.addTask {
+                            await semaphore.wait()
+                            let local = await self.downloadTrack(i, url: url, track: tracks[i])
+                            await semaphore.signal()
+                            await collector.complete(index: i, result: local)
+                        }
                     }
                 }
                 continuation.finish()
+            }
+        }
+    }
+
+    /// Collects concurrent download results and replays them to the consumer in
+    /// the original playlist order. Playback order must match `successfulTracks`
+    /// order (AppState drives titles/scrobbles off the same index), so a fast
+    /// download for track 5 waits until tracks 0-4 have been handed off;
+    /// meanwhile its siblings keep downloading in the background.
+    private actor DownloadCollector {
+        private enum Slot {
+            case pending
+            case failed
+            case done(URL)
+        }
+
+        private var slots: [Slot]
+        private var nextIndex = 0
+        private let tracks: [Track]
+        private let continuation: AsyncStream<LocalTrack>.Continuation
+
+        init(tracks: [Track], continuation: AsyncStream<LocalTrack>.Continuation) {
+            self.tracks = tracks
+            self.slots = Array(repeating: .pending, count: tracks.count)
+            self.continuation = continuation
+        }
+
+        func complete(index: Int, result: URL?) {
+            guard index < slots.count else { return }
+            slots[index] = result.map(Slot.done) ?? .failed
+            drain()
+        }
+
+        private func drain() {
+            while nextIndex < slots.count {
+                switch slots[nextIndex] {
+                case .failed:
+                    nextIndex += 1
+                case .pending:
+                    return
+                case .done(let url):
+                    continuation.yield(LocalTrack(track: tracks[nextIndex], url: url))
+                    nextIndex += 1
+                }
+            }
+        }
+    }
+
+    /// Tiny async semaphore bounding concurrent track downloads so we don't hold
+    /// the whole playlist's audio in memory at once.
+    private actor DownloadSemaphore {
+        private var available: Int
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        init(limit: Int) {
+            self.available = limit
+        }
+
+        func wait() async {
+            if available > 0 {
+                available -= 1
+                return
+            }
+            await withCheckedContinuation { waiters.append($0) }
+        }
+
+        func signal() {
+            if waiters.isEmpty {
+                available += 1
+            } else {
+                waiters.removeFirst().resume()
             }
         }
     }
@@ -347,18 +434,51 @@ class AudioPlayer: ObservableObject {
         #endif
     }
 
+    // MARK: - iOS Background Task
+    //
+    // Without audio playing, the iOS audio background mode does nothing and the
+    // app gets suspended seconds after backgrounding — killing the in-flight
+    // downloads. Holding a background task through the download phase buys a
+    // system-granted grace window (typically ~30s) for the first track to land;
+    // once it's playing, the audio mode takes over and the task is released.
+
+    #if canImport(UIKit)
+    private func beginDownloadBackgroundTask() {
+        guard backgroundTaskID == nil || backgroundTaskID == .invalid else { return }
+        let id = UIApplication.shared.beginBackgroundTask(withName: "com.plexodoro.audio.download") { [weak self] in
+            Task { @MainActor in
+                self?.endDownloadBackgroundTask()
+            }
+        }
+        backgroundTaskID = id
+        fileLog("Background task began (\(id.rawValue))")
+    }
+
+    private func endDownloadBackgroundTask() {
+        guard let id = backgroundTaskID, id != .invalid else { return }
+        backgroundTaskID = nil
+        UIApplication.shared.endBackgroundTask(id)
+        fileLog("Background task ended (\(id.rawValue))")
+    }
+    #else
+    private func beginDownloadBackgroundTask() {}
+    private func endDownloadBackgroundTask() {}
+    #endif
+
     func downloadAndPlay(tracks: [Track], urls: [URL]) async -> [Track] {
         configureAudioSession()
         try? FileManager.default.removeItem(at: fileLogURL)
         fileLog("Downloading \(tracks.count) tracks, playing first immediately…")
 
         let sessionID = startNewSession()
+        beginDownloadBackgroundTask()
         var successfulTracks: [Track] = []
 
         for await local in downloadStream(tracks: tracks, urls: urls) {
             guard playSessionID == sessionID else { return cancelSession() }
             enqueueDownloadedTrack(local: local, sessionID: sessionID, successfulTracks: &successfulTracks)
         }
+        endDownloadBackgroundTask()
 
         return finalizePlayback(successfulTracks: successfulTracks, expected: tracks.count)
     }
@@ -435,6 +555,9 @@ class AudioPlayer: ObservableObject {
             playerNode.play()
             isPlaying = true
             startProgressUpdates()
+            // Audio is now playing: the audio background mode protects the app,
+            // so the download grace task is no longer needed.
+            endDownloadBackgroundTask()
             fileLog("Engine started and playback begun")
         } catch {
             fileErr("Failed to start audio engine: \(error.localizedDescription)")
@@ -493,6 +616,7 @@ class AudioPlayer: ObservableObject {
 
     private func cancelSession() -> [Track] {
         fileLog("Session expired (stop was called), discarding remaining downloads")
+        endDownloadBackgroundTask()
         return []
     }
 
@@ -566,6 +690,7 @@ class AudioPlayer: ObservableObject {
 
     func stop() {
         fileLog("STOP — playSessionID was \(playSessionID)")
+        endDownloadBackgroundTask()
         playSessionID = UUID()
         shouldStopAfterCurrentTrack = false
         stopProgressUpdates()

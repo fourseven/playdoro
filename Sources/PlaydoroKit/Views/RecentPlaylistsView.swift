@@ -2,14 +2,8 @@ import SwiftUI
 
 struct RecentPlaylistsView: View {
     let playlists: [SeedPlaylist]
-    let serverURL: String
-    let token: String
+    let thumbURL: (Track) -> URL?
     let onTap: (SeedPlaylist) -> Void
-
-    private func thumbURL(for track: Track) -> URL? {
-        guard let thumb = track.thumb else { return nil }
-        return URL(string: "\(serverURL)\(thumb)?X-Plex-Token=\(token)")
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -43,7 +37,7 @@ struct RecentPlaylistsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: -10) {
                 ForEach(Array(playlist.seeds.prefix(3).enumerated()), id: \.element.id) { i, track in
-                    AlbumArt(url: thumbURL(for: track))
+                    AlbumArt(url: thumbURL(track))
                         .frame(width: 36, height: 36)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         .overlay(

@@ -5,7 +5,7 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
 ## Build & Test
 
 - `swift build` — build (macOS)
-- `swift test` — run all tests (XCTest, 36 cases across 7 suites)
+- `swift test` — run all tests (XCTest, 99 cases across 16 suites)
 - **iOS simulator:** `xcodebuild -project iOSApp/Playdoro.xcodeproj -scheme Playdoro -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1" build`
 - **iOS device:** build then install/launch via `devicectl`:
   ```bash
@@ -30,21 +30,24 @@ macOS menu-bar app / iOS app — Pomodoro timer synced with Plex music playback.
 ## Architecture
 
 - **Entrypoint:** `Sources/PlaydoroKit/PlaydoroApp.swift` — `@main` SwiftUI `App` with `MenuBarExtra(.window)` (macOS) or `WindowGroup` (iOS). Both apps (`Sources/Playdoro/main.swift` and `iOSApp/Playdoro/main.swift`) just call `PlaydoroApp.main()` from PlaydoroKit.
-- **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicProvider` + `AudioPlayer` directly
-- **Protocol:** `MusicProvider: Sendable` — abstracts music search, playback URLs, session (provider-agnostic; other backends could be added)
-- **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicProvider`) — Plex HTTP API with self-signed cert support via `CertDelegate`
-- **Audio:** `AudioPlayer` (`@MainActor`) — wraps `AVAudioEngine` + `AVAudioPlayerNode`, downloads tracks via `TrackCache` before playback. On iOS, handles `AVAudioSession` interruptions and `AVAudioEngine` configuration changes so playback survives screen lock, sleep, and audio route swaps.
+- **State:** `AppState` (`@MainActor`, `ObservableObject`) — owns `MusicCatalog` + `PlaybackBackend` directly
+- **Catalog protocol:** `MusicCatalog: Sendable` — search, identity, similarity ranking, artwork, and optional session reporting (provider-agnostic). Playback is **not** part of it.
+- **Playback protocol:** `PlaybackBackend` (`@MainActor`, `ObservableObject`) — controls playback (play/pause/stop/seek state + events) plus a `PlaybackCapabilities` flag set. Only the engine backend offers `[.eq, .volume]`; future providers delegate audio to their own player (SDK/webview) and advertise empty capabilities so EQ and volume UI hide themselves.
+- **Networking (Plex):** `PlexClient` (`actor`, conforms `MusicCatalog` + `StreamProviding`) — Plex HTTP API with self-signed cert support via `CertDelegate`.
+- **Audio:** `EnginePlaybackBackend` (`@MainActor`, conforms `PlaybackBackend` + `EQProviding` + `VolumeProviding`) — wraps `AVAudioEngine` + `AVAudioPlayerNode`, downloads tracks via `TrackCache` before playback. On iOS, handles `AVAudioSession` interruptions and `AVAudioEngine` configuration changes so playback survives screen lock, sleep, and audio route swaps. Fed stream URLs by a `StreamProviding` source (Plex's tokenized URLs).
 - **EQ:** `AudioEQ` — manages `AVAudioUnitEQ`, applies AutoEQ presets, supports hard-bypass toggle that remembers the selected preset. Catalog of ~880 presets from oratory1990 + Kazi is bundled as text resources and parsed at startup by `EQPresetLoader`.
 - **Cache:** `TrackCache` (`actor`) — bounded on-disk LRU cache for downloaded audio files (default 500 MB)
 - **Engine:** `PomodoroEngine` (value-type struct) — two-phase pack algorithm (lookahead random → greedy fill)
 
 ### Modularisation Direction
 
-Music provider is a protocol so the backend is swappable:
-- `MusicProvider` protocol (search, getTrack, getNearest, getStreamURL)
-- `PlexClient` conforms
-- `AppState` references `MusicProvider` instead of `PlexClient`
-- `Track` is already generic (id, title, artist, album, duration, score) — `PomodoroEngine` and `AudioPlayer` are already provider-agnostic
+Music backend is split so providers are swappable:
+- `MusicCatalog` protocol (search, getTrack, getNearest, thumbURL, session reporting)
+- `PlaybackBackend` protocol (playback control + capabilities), `EQProviding`/`VolumeProviding` opt-in refinements
+- `StreamProviding` protocol (stream URLs feeding the engine backend)
+- `PlexClient` conforms `MusicCatalog` + `StreamProviding`; `EnginePlaybackBackend` wraps the engine
+- `AppState` references `MusicCatalog` + `PlaybackBackend` instead of `PlexClient`/`AudioPlayer`
+- `Track` is already generic (id, title, artist, album, duration, score) — `PomodoroEngine` and backends are already provider-agnostic
 
 ## Key Files
 
@@ -58,10 +61,11 @@ Music provider is a protocol so the backend is swappable:
 | `ConnectView.swift`, `LinkingView.swift`, `DiscoveringView.swift`, `FailedView.swift` | OAuth connection flow views |
 | `SettingsView.swift` | Connection info, EQ toggle + preset picker entry, disconnect |
 | `EQPickerView.swift` | Searchable list of bundled EQ presets, filterable by author |
-| `AppState.swift` | ViewModel — timer, playlist, orchestrates PlexClient + AudioPlayer |
-| `PlexClient.swift` | Actor-based Plex API client (search, nearest, sessions, stream URLs) conforming `MusicProvider` |
-| `MusicProvider.swift` | `MusicProvider` protocol — abstracts search, playback URLs, session |
-| `AudioPlayer.swift` | AVAudioEngine wrapper, sequential download + cleanup |
+| `AppState.swift` | ViewModel — timer, playlist, orchestrates catalog + playback backend |
+| `PlexClient.swift` | Actor-based Plex API client (search, nearest, sessions, stream URLs) conforming `MusicCatalog` + `StreamProviding` |
+| `MusicProvider.swift` | `MusicCatalog` protocol — search, nearest, artwork, session reporting; `StreamProviding` — playable stream URLs |
+| `PlaybackBackend.swift` | `PlaybackBackend` main-actor control surface + `PlaybackCapabilities`; `EQProviding`/`VolumeProviding` opt-ins |
+| `EnginePlaybackBackend.swift` | AVAudioEngine wrapper, sequential download + cleanup, EQ + volume capability |
 | `AudioEQ.swift` | Manages `AVAudioUnitEQ`, hard-bypass toggle, AutoEQ preset loader + parser |
 | `Resources/EQPresets/<author>/<category>/<headphone>.txt` | 879 AutoEQ `ParametricEQ.txt` files (oratory1990 736 + Kazi 143), upstream `jaakkopasanen/AutoEq@7ae0f56` (2025-07-20). Bundled via `.copy("Resources/EQPresets")` in `Package.swift`; reachable through `Bundle.module` in both macOS + iOS apps. |
 | `TrackCache.swift` | Bounded on-disk LRU cache for downloaded audio files |

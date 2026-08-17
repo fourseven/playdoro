@@ -28,17 +28,24 @@ class AppState: ObservableObject {
     @Published var recentEQPresetIDs: [String] = []
     @Published var variety: Double = PomodoroConfig.default.variety
 
-    var player = AudioPlayer()
-    var client: (any MusicProvider)?
+    var catalog: (any MusicCatalog)?
+    @Published var backend: (any PlaybackBackend)?
+    @Published var currentProgress: Double = 0
+    @Published var volume: Float = 1.0
     #if canImport(UIKit)
     private let nowPlaying = NowPlayingCenter()
     #endif
     private let authManager = PlexAuthManager()
     private var timerSubscription: AnyCancellable?
-    private var startTimerCancellable: AnyCancellable?
+    private var backendCancellable: AnyCancellable?
     private var isTimerPaused = false
     private var cancellables = Set<AnyCancellable>()
     private var playbackReportTimer: Timer?
+    private var pendingTimerStart = false
+    private var pendingTimerDuration: TimeInterval = 0
+    private var lastSyncedIsPlaying = false
+    private var pendingEQPreset: EQPreset?
+    private var pendingEQEnabled = true
 
     init() {
         let savedURL = UserDefaults.standard.string(forKey: UserDefaultsKey.serverURL) ?? ""
@@ -59,29 +66,61 @@ class AppState: ObservableObject {
         recentEQPresetIDs = UserDefaults.standard.stringArray(forKey: UserDefaultsKey.recentEQPresetIDs) ?? []
         loadSavedEQPreset()
 
-        player.$isPlaying
-            .assign(to: \.isPlaying, on: self)
-            .store(in: &cancellables)
-        player.$isPlaying
-            .map { !$0 }
-            .assign(to: \.isTimerPaused, on: self)
-            .store(in: &cancellables)
-
         #if canImport(UIKit)
         nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayback() }
         nowPlaying.setupRemoteCommands()
-        player.$isPlaying
-            .sink { [weak self] _ in self?.updateNowPlaying() }
-            .store(in: &cancellables)
         #endif
+    }
 
-        player.$isPlaying
-            .sink { [weak self] isPlaying in
-                Task { @MainActor in
-                    self?.handlePlaybackStateChange(isPlaying)
-                }
+    // MARK: - Backend lifecycle
+
+    private func setPlexProvider(_ plex: PlexClient) {
+        catalog = plex
+        let newBackend = EnginePlaybackBackend(provider: plex)
+        backend = newBackend
+        bindBackend(newBackend)
+    }
+
+    fileprivate func bindBackend(_ newBackend: any PlaybackBackend) {
+        backendCancellable?.cancel()
+        configurePlaybackCallbacks(newBackend)
+        backendCancellable = newBackend.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in
+                self?.syncFromBackend()
             }
-            .store(in: &cancellables)
+        }
+        applyPendingEQ()
+    }
+
+    @MainActor
+    private func syncFromBackend() {
+        guard let backend = backend else { return }
+        let isPlaying = backend.isPlaying
+        isTimerPaused = !isPlaying
+        currentProgress = backend.currentProgress
+        if let volumeProvider = backend as? any VolumeProviding {
+            volume = volumeProvider.volume
+        }
+        guard isPlaying != lastSyncedIsPlaying else { return }
+        lastSyncedIsPlaying = isPlaying
+        handlePlaybackStateChange(isPlaying)
+        if isPlaying {
+            if pendingTimerStart {
+                pendingTimerStart = false
+                startTimer(duration: pendingTimerDuration)
+            }
+            #if canImport(UIKit)
+            updateNowPlaying()
+            #endif
+        }
+    }
+
+    private func applyPendingEQ() {
+        guard let eq = backend as? any EQProviding else { return }
+        if let preset = pendingEQPreset {
+            eq.applyEQ(preset: preset)
+        }
+        eq.setEQEnabled(pendingEQEnabled)
     }
 
     // MARK: - OAuth Flow
@@ -123,7 +162,10 @@ class AppState: ObservableObject {
     }
 
     func disconnect() {
-        client = nil
+        backend?.stop()
+        backendCancellable?.cancel()
+        backend = nil
+        catalog = nil
         isConfigured = false
         connectionState = .disconnected
         serverURL = ""
@@ -146,7 +188,7 @@ class AppState: ObservableObject {
                     let testClient = PlexClient(serverURL: savedURL, token: token)
                     do {
                         try await testClient.ping()
-                        client = testClient
+                        setPlexProvider(testClient)
                         isConfigured = true
                         connectionState = .connected
                         errorMessage = nil
@@ -203,7 +245,7 @@ class AppState: ObservableObject {
 
         serverURL = uri
         UserDefaults.standard.set(uri, forKey: UserDefaultsKey.serverURL)
-        client = testClient
+        setPlexProvider(testClient)
     }
 
     /// Race probe calls against all URIs. Returns the first URI that responds 2xx
@@ -231,7 +273,7 @@ class AppState: ObservableObject {
 
     func startPomodoro(seedTracks: [Track]) {
         guard state == .idle else { return }
-        guard let client = client else {
+        guard let catalog = catalog, backend != nil else {
             errorMessage = "Configure a music provider first"
             return
         }
@@ -242,10 +284,10 @@ class AppState: ObservableObject {
 
         Task {
             do {
-                let resolved = try await resolveSeedTracks(seedTracks: seedTracks, client: client)
-                let (packed, urls, totalSeconds) = try await preparePackedTracks(seedTracks: resolved, client: client)
+                let resolved = try await resolveSeedTracks(seedTracks: seedTracks, catalog: catalog)
+                let (packed, totalSeconds) = try await preparePackedTracks(seedTracks: resolved, catalog: catalog)
                 self.seedTracks = resolved
-                try await startPlayback(tracks: packed, urls: urls, totalSeconds: totalSeconds)
+                try await startPlayback(tracks: packed, totalSeconds: totalSeconds)
             } catch {
                 errorMessage = error.localizedDescription
                 state = .idle
@@ -306,25 +348,25 @@ class AppState: ObservableObject {
         }
     }
 
-    private func configurePlayerCallbacks() {
-        player.onTrackFinished = { [weak self] track in
+    private func configurePlaybackCallbacks(_ playbackBackend: any PlaybackBackend) {
+        playbackBackend.onTrackFinished = { [weak self] track in
             self?.reportCompletedPlay(track)
             self?.advanceToNextTrack()
             self?.reportCurrentPlayback(.playing)
         }
-        player.onPlaylistFinished = { [weak self] track in
+        playbackBackend.onPlaylistFinished = { [weak self] track in
             if let track {
                 self?.reportCompletedPlay(track)
             }
             self?.finishAndReset()
         }
-        player.onStoppedAtTrackEnd = { [weak self] track in
+        playbackBackend.onStoppedAtTrackEnd = { [weak self] track in
             if let track {
                 self?.reportCompletedPlay(track)
             }
             self?.finishAndReset()
         }
-        player.onTrackDownloaded = { [weak self] track in
+        playbackBackend.onTrackDownloaded = { [weak self] track in
             guard let self = self else { return }
             if let idx = self.playlistTracks.firstIndex(where: { $0.id == track.id }) {
                 self.playlistTracks[idx].isDownloaded = true
@@ -341,17 +383,17 @@ class AppState: ObservableObject {
     /// Report the currently-playing track's live position/state. Fire-and-forget —
     /// network failures must never interrupt the session.
     private func reportCurrentPlayback(_ playState: PlaybackState) {
-        guard state == .running, client != nil, let track = currentPlayingTrack else { return }
+        guard state == .running, catalog != nil, let track = currentPlayingTrack else { return }
         let duration = Double(track.duration) / 1000
-        reportTrackPlayback(track: track, time: min(player.currentElapsed, duration), playState: playState)
+        reportTrackPlayback(track: track, time: min(backend?.currentElapsed ?? 0, duration), playState: playState)
     }
 
     private func reportTrackPlayback(track: Track, time: TimeInterval, playState: PlaybackState) {
-        guard let client = client else { return }
+        guard let catalog = catalog else { return }
         let duration = Double(track.duration) / 1000
         Task {
             do {
-                try await client.reportPlayback(for: track, time: time, duration: duration, state: playState)
+                try await catalog.reportPlayback(for: track, time: time, duration: duration, state: playState)
             } catch {
                 log.warning("Timeline report failed for \(track.title): \(error.localizedDescription)")
             }
@@ -364,7 +406,7 @@ class AppState: ObservableObject {
     }
 
     private func handlePlaybackStateChange(_ isPlaying: Bool) {
-        guard state == .running, client != nil else { return }
+        guard state == .running, catalog != nil else { return }
         if isPlaying {
             startPlaybackReportTimer()
             reportCurrentPlayback(.playing)
@@ -393,45 +435,47 @@ class AppState: ObservableObject {
         playbackReportTimer = nil
     }
 
-    private func startPlayback(tracks: [Track], urls: [URL], totalSeconds: TimeInterval) async throws {
-        configurePlayerCallbacks()
+    private func startPlayback(tracks: [Track], totalSeconds: TimeInterval) async throws {
+        guard let backend = backend else { throw PlaydoroError.playbackFailed }
 
         timeRemaining = totalSeconds
         playlistTracks = tracks
         currentTrackIndex = 0
         currentTrackTitle = tracks.first.map { "\($0.artist) — \($0.title)" } ?? ""
 
-        startTimerCancellable = player.$isPlaying
-            .filter { $0 }
-            .first()
-            .sink { [weak self] _ in
-                self?.startTimer(duration: totalSeconds)
-            }
+        pendingTimerStart = true
+        pendingTimerDuration = totalSeconds
+        // Timer starts on the first play event from the backend — same
+        // semantics as the old first-isPlaying sink, but provider-agnostic.
+        isTimerPaused = true
 
         isDownloading = true
-        playlistTracks = await player.downloadAndPlay(tracks: tracks, urls: urls)
-        isDownloading = false
+        defer { isDownloading = false }
+        let playedTracks = try await backend.play(tracks: tracks, totalSeconds: totalSeconds)
+        pendingTimerStart = false
 
         guard state == .running else { return }
 
-        if playlistTracks.isEmpty {
-            errorMessage = "No tracks could be downloaded"
+        if playedTracks.isEmpty {
+            errorMessage = "No tracks could be played"
             timerSubscription?.cancel()
             state = .idle
             return
         }
 
-        // Rebase the pomodoro clock onto the tracks that actually downloaded:
+        playlistTracks = playedTracks
+
+        // Rebase the pomodoro clock onto the tracks that actually played:
         // the timer was started from the PLANNED total when playback began, so
         // fold in the time already counted and measure the remainder against
         // the real playlist length, not the ideal one.
         let elapsed = min(totalSeconds, max(0, totalSeconds - timeRemaining))
-        let actualTotal = playlistTracks.reduce(TimeInterval(0)) { $0 + $1.duration / 1000 }
+        let actualTotal = playedTracks.reduce(TimeInterval(0)) { $0 + $1.duration / 1000 }
         timeRemaining = max(0, actualTotal - elapsed)
 
-        let missing = tracks.count - playlistTracks.count
+        let missing = tracks.count - playedTracks.count
         if missing > 0 {
-            sessionWarning = "\(missing) of \(tracks.count) tracks couldn't be downloaded — playing \(playlistTracks.count)"
+            sessionWarning = "\(missing) of \(tracks.count) tracks couldn't be played — playing \(playedTracks.count)"
         }
 
         recordPlaylist(seeds: self.seedTracks)
@@ -461,24 +505,26 @@ class AppState: ObservableObject {
         // Use the decoded-audio timeline so the scrubber baseline and duration
         // share one clock; fall back to the provider duration before playback
         // has decoded a file.
-        let durationSeconds = player.currentDuration > 0 ? player.currentDuration : track.duration / 1000
+        let backend = self.backend
+        let durationSeconds = backend?.currentDuration ?? 0
+        let resolvedDuration = durationSeconds > 0 ? durationSeconds : track.duration / 1000
         nowPlaying.update(
             title: track.title,
             artist: track.artist,
             album: track.album,
-            durationSeconds: durationSeconds,
-            elapsedSeconds: player.currentElapsed,
-            isPlaying: player.isPlaying,
-            artworkURL: client?.thumbURL(for: track)
+            durationSeconds: resolvedDuration,
+            elapsedSeconds: backend?.currentElapsed ?? 0,
+            isPlaying: backend?.isPlaying ?? false,
+            artworkURL: catalog?.thumbURL(for: track)
         )
     }
     #endif
 
-    private func resolveSeedTracks(seedTracks: [Track], client: any MusicProvider) async throws -> [Track] {
+    private func resolveSeedTracks(seedTracks: [Track], catalog: any MusicCatalog) async throws -> [Track] {
         try await withThrowingTaskGroup(of: Track.self) { group in
             for seed in seedTracks {
                 group.addTask {
-                    guard let track = try await client.getTrack(id: seed.id) else {
+                    guard let track = try await catalog.getTrack(id: seed.id) else {
                         throw PlaydoroError.trackUnavailable
                     }
                     return track
@@ -490,8 +536,8 @@ class AppState: ObservableObject {
         }
     }
 
-    private func preparePackedTracks(seedTracks: [Track], client: any MusicProvider) async throws -> (packed: [Track], urls: [URL], totalSeconds: TimeInterval) {
-        let nearest = try await client.getNearest(
+    private func preparePackedTracks(seedTracks: [Track], catalog: any MusicCatalog) async throws -> (packed: [Track], totalSeconds: TimeInterval) {
+        let nearest = try await catalog.getNearest(
             trackIds: seedTracks.map(\.id),
             limit: PomodoroConfig.default.maxCandidates
         )
@@ -500,21 +546,14 @@ class AppState: ObservableObject {
         var packed = engine.pack(tracks: candidates, mustInclude: seedTracks)
         packed.shuffle()
         let totalSeconds = engine.totalDuration(of: packed)
-
-        let urls: [URL] = packed.compactMap { client.streamURL(for: $0) }
-
-        guard urls.count == packed.count else {
-            throw PlaydoroError.noAudioURL
-        }
-
-        return (packed, urls, totalSeconds)
+        return (packed, totalSeconds)
     }
 
     private func finishAndReset() {
         Task { @MainActor in
             timerSubscription?.cancel()
             state = .finished
-            player.stop()
+            backend?.stop()
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             resetState()
         }
@@ -525,21 +564,41 @@ class AppState: ObservableObject {
         timerSubscription?.cancel()
         // Partial play: end the Plex session at the current position so Tautulli
         // records the partial track instead of losing it.
-        if client != nil, let track = currentPlayingTrack {
+        if catalog != nil, let track = currentPlayingTrack {
             let duration = Double(track.duration) / 1000
-            reportTrackPlayback(track: track, time: min(player.currentElapsed, duration), playState: .stopped)
+            reportTrackPlayback(track: track, time: min(backend?.currentElapsed ?? 0, duration), playState: .stopped)
         }
         stopPlaybackReportTimer()
-        player.stop()
+        backend?.stop()
         resetState()
     }
 
     func togglePlayback() {
-        player.togglePlayPause()
+        backend?.togglePlayPause()
+    }
+
+    func setVolume(_ value: Float) {
+        let clamped = min(max(value, 0), 1)
+        if let provider = backend as? any VolumeProviding {
+            provider.volume = clamped
+        }
+        volume = clamped
+    }
+
+    var supportsEQ: Bool {
+        backend?.capabilities.contains(.eq) ?? false
+    }
+
+    var supportsVolume: Bool {
+        backend?.capabilities.contains(.volume) ?? false
+    }
+
+    private var eqProvider: (any EQProviding)? {
+        backend as? any EQProviding
     }
 
     func applyEQ(preset: EQPreset) {
-        player.applyEQ(preset: preset)
+        eqProvider?.applyEQ(preset: preset)
         UserDefaults.standard.set(preset.id, forKey: UserDefaultsKey.eqPresetID)
         recordRecentEQPreset(preset)
     }
@@ -568,16 +627,16 @@ class AppState: ObservableObject {
     }
 
     var currentEQPreset: EQPreset {
-        player.currentEQPreset
+        eqProvider?.currentEQPreset ?? pendingEQPreset ?? .flat
     }
 
     func setEQEnabled(_ enabled: Bool) {
-        player.setEQEnabled(enabled)
+        eqProvider?.setEQEnabled(enabled)
         UserDefaults.standard.set(enabled, forKey: UserDefaultsKey.eqEnabled)
     }
 
     var eqEnabled: Bool {
-        player.eqEnabled
+        eqProvider?.eqEnabled ?? true
     }
 
     func setVariety(_ value: Double) {
@@ -588,12 +647,10 @@ class AppState: ObservableObject {
 
     private func loadSavedEQPreset() {
         let savedID = UserDefaults.standard.string(forKey: UserDefaultsKey.eqPresetID)
-        let preset = EQPreset.resolve(id: savedID)
-        player.applyEQ(preset: preset)
+        pendingEQPreset = EQPreset.resolve(id: savedID)
 
         // UserDefaults stores Bool as NSNumber/Any; default to true if absent.
-        let savedEnabled = UserDefaults.standard.object(forKey: UserDefaultsKey.eqEnabled) as? Bool ?? true
-        player.setEQEnabled(savedEnabled)
+        pendingEQEnabled = UserDefaults.standard.object(forKey: UserDefaultsKey.eqEnabled) as? Bool ?? true
     }
 
     private func startTimer(duration: TimeInterval) {
@@ -613,7 +670,7 @@ class AppState: ObservableObject {
     private func handleTimerFinished() {
         state = .stopping
         timerSubscription?.cancel()
-        player.stopAfterCurrentTrack()
+        backend?.stopAfterCurrentTrack()
     }
 
     private func resetState() {
@@ -629,8 +686,8 @@ class AppState: ObservableObject {
         errorMessage = nil
         sessionWarning = nil
         stopPlaybackReportTimer()
-        startTimerCancellable?.cancel()
-        startTimerCancellable = nil
+        pendingTimerStart = false
+        lastSyncedIsPlaying = false
     }
 
     var formattedTime: String {

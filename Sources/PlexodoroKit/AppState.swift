@@ -38,6 +38,7 @@ class AppState: ObservableObject {
     private var startTimerCancellable: AnyCancellable?
     private var isTimerPaused = false
     private var cancellables = Set<AnyCancellable>()
+    private var playbackReportTimer: Timer?
 
     init() {
         let savedURL = UserDefaults.standard.string(forKey: UserDefaultsKey.serverURL) ?? ""
@@ -73,6 +74,14 @@ class AppState: ObservableObject {
             .sink { [weak self] _ in self?.updateNowPlaying() }
             .store(in: &cancellables)
         #endif
+
+        player.$isPlaying
+            .sink { [weak self] isPlaying in
+                Task { @MainActor in
+                    self?.handlePlaybackStateChange(isPlaying)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - OAuth Flow
@@ -299,18 +308,19 @@ class AppState: ObservableObject {
 
     private func configurePlayerCallbacks() {
         player.onTrackFinished = { [weak self] track in
-            self?.reportTrackPlay(track)
+            self?.reportCompletedPlay(track)
             self?.advanceToNextTrack()
+            self?.reportCurrentPlayback(.playing)
         }
         player.onPlaylistFinished = { [weak self] track in
             if let track {
-                self?.reportTrackPlay(track)
+                self?.reportCompletedPlay(track)
             }
             self?.finishAndReset()
         }
         player.onStoppedAtTrackEnd = { [weak self] track in
             if let track {
-                self?.reportTrackPlay(track)
+                self?.reportCompletedPlay(track)
             }
             self?.finishAndReset()
         }
@@ -322,17 +332,65 @@ class AppState: ObservableObject {
         }
     }
 
-    /// Log a completed play to the provider (Plex scrobble). Fire-and-forget —
-    /// network failures must never interrupt the session flow.
-    private func reportTrackPlay(_ track: Track) {
+    /// Report a fully-played track at full duration — Plex treats a stopped
+    /// timeline at >= duration as "watched" and Tautulli records the session.
+    private func reportCompletedPlay(_ track: Track) {
+        reportTrackPlayback(track: track, time: Double(track.duration) / 1000, playState: .stopped)
+    }
+
+    /// Report the currently-playing track's live position/state. Fire-and-forget —
+    /// network failures must never interrupt the session.
+    private func reportCurrentPlayback(_ playState: PlaybackState) {
+        guard state == .running, client != nil, let track = currentPlayingTrack else { return }
+        let duration = Double(track.duration) / 1000
+        reportTrackPlayback(track: track, time: min(player.currentElapsed, duration), playState: playState)
+    }
+
+    private func reportTrackPlayback(track: Track, time: TimeInterval, playState: PlaybackState) {
+        guard let client = client else { return }
+        let duration = Double(track.duration) / 1000
         Task {
-            guard let client = client else { return }
             do {
-                try await client.reportPlay(for: track)
+                try await client.reportPlayback(for: track, time: time, duration: duration, state: playState)
             } catch {
-                log.warning("Failed to report play for \(track.title): \(error.localizedDescription)")
+                log.warning("Timeline report failed for \(track.title): \(error.localizedDescription)")
             }
         }
+    }
+
+    private var currentPlayingTrack: Track? {
+        guard playlistTracks.indices.contains(currentTrackIndex) else { return nil }
+        return playlistTracks[currentTrackIndex]
+    }
+
+    private func handlePlaybackStateChange(_ isPlaying: Bool) {
+        guard state == .running, client != nil else { return }
+        if isPlaying {
+            startPlaybackReportTimer()
+            reportCurrentPlayback(.playing)
+        } else {
+            stopPlaybackReportTimer()
+            reportCurrentPlayback(.paused)
+        }
+    }
+
+    /// Slow heartbeat that keeps the Plex timeline session alive and the current
+    /// position advancing in Tautulli while a track runs. Position ticks also
+    /// give pause/resume a valid `time` baseline.
+    private func startPlaybackReportTimer() {
+        stopPlaybackReportTimer()
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.reportCurrentPlayback(.playing)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        playbackReportTimer = timer
+    }
+
+    private func stopPlaybackReportTimer() {
+        playbackReportTimer?.invalidate()
+        playbackReportTimer = nil
     }
 
     private func startPlayback(tracks: [Track], urls: [URL], totalSeconds: TimeInterval) async throws {
@@ -465,6 +523,13 @@ class AppState: ObservableObject {
     func stopPomodoro() {
         state = .stopping
         timerSubscription?.cancel()
+        // Partial play: end the Plex session at the current position so Tautulli
+        // records the partial track instead of losing it.
+        if client != nil, let track = currentPlayingTrack {
+            let duration = Double(track.duration) / 1000
+            reportTrackPlayback(track: track, time: min(player.currentElapsed, duration), playState: .stopped)
+        }
+        stopPlaybackReportTimer()
         player.stop()
         resetState()
     }
@@ -563,6 +628,7 @@ class AppState: ObservableObject {
         seedTracks = []
         errorMessage = nil
         sessionWarning = nil
+        stopPlaybackReportTimer()
         startTimerCancellable?.cancel()
         startTimerCancellable = nil
     }

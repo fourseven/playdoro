@@ -1,5 +1,14 @@
 import Foundation
 
+/// Playback lifecycle state reported to the provider's session timeline.
+/// `stopped` at full duration is what tells servers like Plex the item was
+/// watched.
+enum PlaybackState: String {
+    case playing
+    case paused
+    case stopped
+}
+
 protocol MusicProvider: Sendable {
     func ping() async throws
     func searchTracks(query: String, limit: Int) async throws -> [Track]
@@ -7,8 +16,10 @@ protocol MusicProvider: Sendable {
     func getNearest(trackId: String, limit: Int) async throws -> [Track]
     func streamURL(for track: Track) -> URL?
     func thumbURL(for track: Track) -> URL?
-    /// Record a completed play of `track` on the provider (e.g. Plex scrobble).
-    func reportPlay(for track: Track) async throws
+    /// Report a live playback position/state for `track` so the provider's
+    /// sessions and history reflect real playback (visible in Tautulli / Plex
+    /// Web). `time` and `duration` are in seconds.
+    func reportPlayback(for track: Track, time: TimeInterval, duration: TimeInterval, state: PlaybackState) async throws
 }
 
 extension MusicProvider {

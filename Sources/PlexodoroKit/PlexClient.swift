@@ -1,11 +1,17 @@
 import Foundation
 import Logging
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private let log = Logger(label: "com.plexodoro.plexclient")
 
 actor PlexClient: MusicProvider {
     let serverURL: String
     let token: String
+    /// Stable per-install client id, so Plex/Tautulli attribute every session to
+    /// the same "Plexodoro" client instead of a fresh random one per launch.
+    let clientIdentifier: String
 
     private let decoder = JSONDecoder()
     private let session: URLSession
@@ -15,9 +21,18 @@ actor PlexClient: MusicProvider {
     init(serverURL: String, token: String) {
         self.serverURL = serverURL
         self.token = token
+        self.clientIdentifier = Self.persistentClientIdentifier()
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 5
         self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+    }
+
+    private static func persistentClientIdentifier() -> String {
+        let key = "com.plexodoro.clientIdentifier"
+        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
+        let id = "Plexodoro-\(UUID().uuidString)"
+        UserDefaults.standard.set(id, forKey: key)
+        return id
     }
 
     deinit { session.invalidateAndCancel() }
@@ -63,14 +78,17 @@ actor PlexClient: MusicProvider {
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
-    private func fetchJSON(path: String, query: [URLQueryItem] = [], method: String = "GET") async throws -> Data {
+    private func fetchJSON(path: String, query: [URLQueryItem] = [], method: String = "GET", headers: [String: String] = [:]) async throws -> Data {
         let requestURL = url(path: path, query: query)
         log.debug("Request: \(method) \(requestURL.absoluteString)")
 
         var req = URLRequest(url: requestURL)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Client-Identifier")
+        req.setValue(self.clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
         req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Product")
+        for (field, value) in headers {
+            req.setValue(value, forHTTPHeaderField: field)
+        }
         req.httpMethod = method
         req.timeoutInterval = 15
 
@@ -245,17 +263,52 @@ actor PlexClient: MusicProvider {
         return (container.metadata ?? []).map { $0.toTrack }
     }
 
-    /// Record a completed play in Plex's play history (scrobble). `track.id`
-    /// is the rating key the endpoint expects.
-    func reportPlay(for track: Track) async throws {
+    /// Report a live playback session for `track` to Plex's timeline API.
+    /// `state = .playing` creates/advances a session that appears in Tautulli
+    /// and Plex Web under the Plexodoro client; `.stopped` at full duration
+    /// ends it and marks the item watched. Sent by AppState on state changes
+    /// and on a slow cadence while playing.
+    func reportPlayback(for track: Track, time: TimeInterval, duration: TimeInterval, state: PlaybackState) async throws {
+        let ms = Int(time * 1000)
+        let durationMs = Int(duration * 1000)
+        let headers = [
+            "X-Plex-Platform": platformName,
+            "X-Plex-Platform-Version": Self.platformVersion,
+            "X-Plex-Version": "1.0",
+            "X-Plex-Device": "Plexodoro",
+            "X-Plex-Device-Name": "Plexodoro",
+            "X-Plex-Model": "Plexodoro",
+            "X-Plex-Product": "Plexodoro",
+        ]
         _ = try await fetchJSON(
-            path: "/:/scrobble",
+            path: "/:/timeline",
             query: [
+                URLQueryItem(name: "ratingKey", value: track.id),
+                URLQueryItem(name: "key", value: "/library/metadata/\(track.id)"),
                 URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
-                URLQueryItem(name: "key", value: track.id)
-            ]
+                URLQueryItem(name: "state", value: state.rawValue),
+                URLQueryItem(name: "time", value: String(ms)),
+                URLQueryItem(name: "duration", value: String(durationMs)),
+            ],
+            headers: headers
         )
-        log.info("Reported play: \(track.title) (id \(track.id))")
+        log.info("Timeline \(state.rawValue) \(track.title) [#\(track.id)] at \(ms)ms/\(durationMs)ms")
+    }
+
+    private var platformName: String {
+        #if canImport(UIKit)
+        return "iOS"
+        #else
+        return "macOS"
+        #endif
+    }
+
+    private static var platformVersion: String {
+        #if canImport(UIKit)
+        return UIDevice.current.systemVersion
+        #else
+        return ProcessInfo.processInfo.operatingSystemVersionString
+        #endif
     }
 
     nonisolated func thumbURL(for track: Track) -> URL? {

@@ -81,7 +81,7 @@ Music provider is a protocol so the backend is swappable:
 - Plex JSON response shape: `MediaContainer` → `Metadata[]` — unwrapped via `CodingKeys`
 - Track durations are in **milliseconds** everywhere (`duration / 1000` to get seconds)
 - Tracks download sequentially to a bounded on-disk cache before `AVAudioEngine` starts; cache persists across sessions
-- Audio log at `<tmp>/plexodoro_audio_player.log` (OSLog + file)
+- Audio log at `<tmp>/playdoro_audio_player.log` (OSLog + file)
 - Git workflow: features land on `main` (see iOS SPM note below for why `main` matters)
 - **iOS Xcode project + SPM:** the iOS app references the local package by `file://` URL with `branch = main`. SPM does a real git checkout, so **working-tree changes to `Sources/PlaydoroKit/*` are not seen by the iOS build until committed**. `PlaydoroKit` must remain declared as a `.library` product in `Package.swift` (not just a target) or the iOS app fails with "Missing package product 'PlaydoroKit'".
 - **iOS builds read `PlaydoroKit` from `main`:** because the iOS package ref is pinned to `branch = main`, `PlaydoroKit` changes must land **on `main`** before the iOS build can see them — a feature branch alone won't do. If your workflow blocks direct commits to `main`, commit on a throwaway branch then fast-forward `main` (the FF is a `git switch`/`git merge`, not a `git commit`):

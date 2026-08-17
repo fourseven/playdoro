@@ -1,7 +1,7 @@
 import Logging
 import SwiftUI
 
-private let log = Logger(label: "com.plexodoro.albumart")
+private let log = Logger(label: AppIdentity.key("albumart"))
 
 private let session: URLSession = {
     let config = URLSessionConfiguration.default

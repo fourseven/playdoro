@@ -4,7 +4,7 @@ import Logging
 import UIKit
 #endif
 
-private let log = Logger(label: "com.plexodoro.plexclient")
+private let log = Logger(label: AppIdentity.key("plexclient"))
 
 actor PlexClient: MusicProvider {
     let serverURL: String
@@ -28,9 +28,9 @@ actor PlexClient: MusicProvider {
     }
 
     private static func persistentClientIdentifier() -> String {
-        let key = "com.plexodoro.clientIdentifier"
+        let key = AppIdentity.key("clientIdentifier")
         if let existing = UserDefaults.standard.string(forKey: key) { return existing }
-        let id = "Plexodoro-\(UUID().uuidString)"
+        let id = "\(AppIdentity.name)-\(UUID().uuidString)"
         UserDefaults.standard.set(id, forKey: key)
         return id
     }
@@ -51,7 +51,7 @@ actor PlexClient: MusicProvider {
         var req = URLRequest(url: url)
         req.timeoutInterval = timeout
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Client-Identifier")
+        req.setValue(AppIdentity.name, forHTTPHeaderField: "X-Plex-Client-Identifier")
 
         return await withCheckedContinuation { continuation in
             probeSession.dataTask(with: req) { _, response, _ in
@@ -85,7 +85,7 @@ actor PlexClient: MusicProvider {
         var req = URLRequest(url: requestURL)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue(self.clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
-        req.setValue("Plexodoro", forHTTPHeaderField: "X-Plex-Product")
+        req.setValue(AppIdentity.name, forHTTPHeaderField: "X-Plex-Product")
         for (field, value) in headers {
             req.setValue(value, forHTTPHeaderField: field)
         }
@@ -274,11 +274,11 @@ actor PlexClient: MusicProvider {
         let headers = [
             "X-Plex-Platform": platformName,
             "X-Plex-Platform-Version": Self.platformVersion,
-            "X-Plex-Version": "1.0",
-            "X-Plex-Device": "Plexodoro",
-            "X-Plex-Device-Name": "Plexodoro",
-            "X-Plex-Model": "Plexodoro",
-            "X-Plex-Product": "Plexodoro",
+            "X-Plex-Version": AppIdentity.version,
+            "X-Plex-Device": AppIdentity.name,
+            "X-Plex-Device-Name": AppIdentity.name,
+            "X-Plex-Model": AppIdentity.name,
+            "X-Plex-Product": AppIdentity.name,
         ]
         _ = try await fetchJSON(
             path: "/:/timeline",

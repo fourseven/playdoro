@@ -1,7 +1,7 @@
 import SwiftUI
 import Logging
 
-private let log = Logger(label: "com.plexodoro.backdrop")
+private let log = Logger(label: AppIdentity.key("backdrop"))
 
 private let backdropSession: URLSession = {
     let config = URLSessionConfiguration.default

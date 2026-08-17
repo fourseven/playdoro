@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import Logging
 
-private let log = Logger(label: "com.plexodoro.cert")
+private let log = Logger(label: AppIdentity.key("cert"))
 
 /// URLSession delegate that handles Plex LAN servers' self-signed certificates.
 ///

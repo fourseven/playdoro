@@ -216,7 +216,7 @@ struct ContentView: View {
 
     private var headerBlock: some View {
         VStack(spacing: 6) {
-            Text("Plexodoro")
+            Text(AppIdentity.name)
                 .font(Theme.titleFont)
                 .foregroundStyle(.white)
             Text("Focus with your library")

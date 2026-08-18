@@ -85,8 +85,9 @@ actor PlexAuthManager {
         throw PlaydoroError.authTimeout
     }
 
-    /// Discover Plex servers and return server name + all connection URIs to try.
-    func discoverServers(token: String) async throws -> (serverName: String, uris: [String]) {
+    /// Discover Plex servers and return server name + all connection endpoints to
+    /// try, each tagged with whether Plex considers it a local-network connection.
+    func discoverServers(token: String) async throws -> (serverName: String, endpoints: [PlexServerEndpoint]) {
         var req = URLRequest(url: URL(string: "https://clients.plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1")!)
         for (k, v) in baseHeaders { req.setValue(v, forHTTPHeaderField: k) }
         req.setValue(token, forHTTPHeaderField: "X-Plex-Token")
@@ -121,8 +122,8 @@ actor PlexAuthManager {
             log.info("  \(c.uri)  local=\(c.local.map(String.init) ?? "?")")
         }
         let sorted = connections.sorted { a, b in priority(a) > priority(b) }
-        let uris = sorted.map(\.uri)
-        return (server.name, uris)
+        let endpoints = sorted.map { PlexServerEndpoint(uri: $0.uri, isLocal: $0.local ?? false) }
+        return (server.name, endpoints)
     }
 
     /// Prioritise connections by likelihood of being reachable from this machine.

@@ -25,7 +25,7 @@ private let cacheLimit = 50 * 1024 * 1024
 
 /// Fetch album-art bytes for `url`, using the on-disk cache and the
 /// self-signed-cert-trusting session. Shared by `AlbumArt` (SwiftUI) and the
-/// iOS Now Playing centre.
+/// Now Playing centre.
 func loadAlbumArtData(from url: URL) async -> Data? {
     let cached = cachePath(for: url)
     if FileManager.default.fileExists(atPath: cached.path) {

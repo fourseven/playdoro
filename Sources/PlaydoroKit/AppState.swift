@@ -32,9 +32,7 @@ class AppState: ObservableObject {
     @Published var backend: (any PlaybackBackend)?
     @Published var currentProgress: Double = 0
     @Published var volume: Float = 1.0
-    #if canImport(UIKit)
     private let nowPlaying = NowPlayingCenter()
-    #endif
     private let authManager = PlexAuthManager()
     private var timerSubscription: AnyCancellable?
     private var backendCancellable: AnyCancellable?
@@ -66,10 +64,8 @@ class AppState: ObservableObject {
         recentEQPresetIDs = UserDefaults.standard.stringArray(forKey: UserDefaultsKey.recentEQPresetIDs) ?? []
         loadSavedEQPreset()
 
-        #if canImport(UIKit)
         nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayback() }
         nowPlaying.setupRemoteCommands()
-        #endif
     }
 
     // MARK: - Backend lifecycle
@@ -104,14 +100,14 @@ class AppState: ObservableObject {
         guard isPlaying != lastSyncedIsPlaying else { return }
         lastSyncedIsPlaying = isPlaying
         handlePlaybackStateChange(isPlaying)
+        // Feed the system card on both transitions — macOS keys its media-key
+        // ownership off `playbackState`, so pausing must publish `.paused`.
+        updateNowPlaying()
         if isPlaying {
             if pendingTimerStart {
                 pendingTimerStart = false
                 startTimer(duration: pendingTimerDuration)
             }
-            #if canImport(UIKit)
-            updateNowPlaying()
-            #endif
         }
     }
 
@@ -505,12 +501,9 @@ class AppState: ObservableObject {
         currentTrackIndex = nextIndex
         let track = playlistTracks[nextIndex]
         currentTrackTitle = "\(track.artist) — \(track.title)"
-        #if canImport(UIKit)
         updateNowPlaying()
-        #endif
     }
 
-    #if canImport(UIKit)
     private func updateNowPlaying() {
         guard state == .running, playlistTracks.indices.contains(currentTrackIndex) else {
             nowPlaying.clear()
@@ -533,7 +526,6 @@ class AppState: ObservableObject {
             artworkURL: catalog?.thumbURL(for: track)
         )
     }
-    #endif
 
     private func resolveSeedTracks(seedTracks: [Track], catalog: any MusicCatalog) async throws -> [Track] {
         try await withThrowingTaskGroup(of: Track.self) { group in
@@ -690,9 +682,7 @@ class AppState: ObservableObject {
 
     private func resetState() {
         state = .idle
-        #if canImport(UIKit)
         nowPlaying.clear()
-        #endif
         timeRemaining = 25 * 60
         currentTrackTitle = ""
         playlistTracks = []

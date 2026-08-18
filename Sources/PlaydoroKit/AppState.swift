@@ -136,12 +136,12 @@ class AppState: ObservableObject {
                 token = newToken
                 UserDefaults.standard.set(newToken, forKey: UserDefaultsKey.plexToken)
 
-                let (name, uris) = try await authManager.discoverServers(token: newToken)
+                let (name, endpoints) = try await authManager.discoverServers(token: newToken)
                 serverName = name
                 UserDefaults.standard.set(name, forKey: UserDefaultsKey.serverName)
 
                 connectionState = .discovering
-                try await connectToServer(uris: uris, token: newToken)
+                try await connectToServer(endpoints: endpoints, token: newToken)
 
                 isConfigured = true
                 connectionState = .connected
@@ -206,10 +206,10 @@ class AppState: ObservableObject {
 
     private func rediscover(token: String) async {
         do {
-            let (name, uris) = try await authManager.discoverServers(token: token)
+            let (name, endpoints) = try await authManager.discoverServers(token: token)
             serverName = name
             UserDefaults.standard.set(name, forKey: UserDefaultsKey.serverName)
-            try await connectToServer(uris: uris, token: token)
+            try await connectToServer(endpoints: endpoints, token: token)
             isConfigured = true
             connectionState = .connected
         } catch {
@@ -219,18 +219,33 @@ class AppState: ObservableObject {
         }
     }
 
-    /// Race all URIs in parallel; first probe to win takes it. Then build a real
-    /// client and confirm with a full ping. Much faster than sequential probing
-    /// when several candidate URIs are unreachable.
-    private func connectToServer(uris: [String], token: String) async throws {
+    /// Race the endpoints in two waves, preferring Plex-local connections so
+    /// downloads ride the LAN path instead of the flaky public/WAN hairpin route.
+    /// Local probes race for up to `timeout`; only if none respond do we fall
+    /// back to the remote URIs. The winner is then confirmed with a full ping.
+    private func connectToServer(endpoints: [PlexServerEndpoint], token: String) async throws {
         if isConfigured {
             log.info("Already connected, skipping scan")
             return
         }
 
-        log.info("Racing \(uris.count) candidate URIs in parallel…")
-        guard let uri = await raceProbe(uris: uris, token: token) else {
-            log.error("All \(uris.count) candidate URIs failed probe")
+        let local = endpoints.filter { $0.isLocal }.map(\.uri)
+        let remote = endpoints.filter { !$0.isLocal }.map(\.uri)
+        log.info("Racing \(endpoints.count) candidate URIs, preferring \(local.count) local over \(remote.count) remote…")
+
+        var uri: String?
+        if local.isEmpty {
+            uri = await raceProbe(uris: remote, token: token, timeout: 2.0)
+        } else if let localWinner = await raceProbe(uris: local, token: token, timeout: 2.0) {
+            uri = localWinner
+            log.info("Local probe won at \(localWinner)")
+        } else {
+            log.info("No local candidate responded — falling back to \(remote.count) remote URIs")
+            uri = await raceProbe(uris: remote, token: token, timeout: 2.0)
+        }
+
+        guard let uri else {
+            log.error("All \(endpoints.count) candidate URIs failed probe")
             throw PlaydoroError.serverUnreachable
         }
 

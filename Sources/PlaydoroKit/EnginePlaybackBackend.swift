@@ -76,15 +76,14 @@ class EnginePlaybackBackend: PlaybackBackend, EQProviding, VolumeProviding {
     private var backgroundTaskID: UIBackgroundTaskIdentifier?
     #endif
 
-    private static let maxConcurrentDownloads = 4
+    // Downloads are strictly serial: WAN/hairpin paths (and Plex Relay) reset
+    // connections whenever a second download overlaps, dropping the whole burst
+    // with -1005. One at a time keeps the sole connection alive; track 0 plays
+    // immediately and the rest prefetch sequentially, so wall time barely moves.
+    private static let maxConcurrentDownloads = 1
     private static let maxDownloadAttempts = 3
 
     private let cache = TrackCache()
-    private let session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        return URLSession(configuration: config, delegate: CertDelegate(), delegateQueue: nil)
-    }()
 
     var onTrackFinished: ((Track) -> Void)?
     var onPlaylistFinished: ((Track?) -> Void)?
@@ -437,8 +436,17 @@ class EnginePlaybackBackend: PlaybackBackend, EQProviding, VolumeProviding {
     }
 
     private func attemptFetch(_ i: Int, _ url: URL, _ track: Track, extension ext: String) async -> FetchResult {
+        // Dedicated session per attempt: one TCP connection carrying exactly one
+        // request. A server-side connection reset (Plex drops HTTP/2 under
+        // concurrent load) then only takes down this track, not the whole batch.
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.httpMaximumConnectionsPerHost = 1
+        let session = URLSession(configuration: config, delegate: CertDelegate(), delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+
         do {
-            let (data, response) = try await self.session.data(from: url)
+            let (data, response) = try await session.data(from: url)
             if let httpResponse = response as? HTTPURLResponse {
                 fileLog("  HTTP \(httpResponse.statusCode), \(data.count) bytes for track \(i)")
                 guard httpResponse.statusCode == 200 else {

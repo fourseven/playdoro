@@ -360,3 +360,11 @@ struct PlexResourceConnection: Decodable {
     let status: Int?
     let message: String?
 }
+
+/// A candidate server endpoint: connection URI plus whether Plex marks it as
+/// being on the server's own local network. Playdoro prefers the local path so
+/// downloads don't ride the flaky public/WAN hairpin route.
+struct PlexServerEndpoint: Sendable, Equatable {
+    let uri: String
+    let isLocal: Bool
+}

@@ -12,17 +12,8 @@ typealias NowPlayingImage = NSImage
 #endif
 
 /// Drives the system "Now Playing" surfaces: the iOS lock-screen / Control
-/// Center card on iOS, and the macOS Control Center module + hardware media
-/// keys on macOS. Owned and fed by `AppState`.
-///
-/// On macOS, keeping the play/pause media keys routed to a menu-bar app hinges
-/// on two things beyond the handlers themselves:
-///  1. `MPRemoteCommandCenter.shared()` handlers must be registered with
-///     `isEnabled = true` so the system advertises the app as a now-playing
-///     source.
-///  2. `MPNowPlayingInfoCenter.playbackState` must be set to something other
-///     than `.unknown` — `.unknown` convinces the system the app isn't playing
-///     and hands the keys to Music/Safari instead (see IINA issue #3574).
+/// Center card, and the macOS Control Center module + hardware media keys.
+/// Owned and fed by `AppState`.
 @MainActor
 final class NowPlayingCenter {
     var onTogglePlayPause: (() -> Void)?
@@ -36,8 +27,9 @@ final class NowPlayingCenter {
             self?.onTogglePlayPause?()
             return .success
         }
-        // Play / pause / the hardware play-pause key all map to the same
-        // idempotent toggle, mirroring how the on-screen button behaves.
+        // The key can arrive as play, pause, or toggle; all map to the same
+        // idempotent toggle. Enabled handlers also advertise us as a
+        // now-playing source on macOS.
         for command in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand] {
             command.isEnabled = true
             command.addTarget(handler: toggle)
@@ -80,7 +72,8 @@ final class NowPlayingCenter {
             info[MPMediaItemPropertyArtwork] = existing
         }
         #if os(macOS)
-        // macOS won't claim the media keys unless the state is explicit.
+        // Media keys route only to apps whose state is explicit; `.unknown`
+        // hands them to Music/Safari (see IINA issue #3574).
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
         #endif
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
